@@ -229,132 +229,349 @@ This is **not yet treated as a final product decision** and must be explicitly c
 
 ---
 
-## 10. Matching — Spatial + Temporal Product Requirement
+## 10. Matching and Dispatch — Product Requirement
 
-Matching must reason about **location, movement, and time**.
+RouteBite matching must consider **location, route, time, trip progress, detour, and partner availability**.
 
-A partner should not receive a request merely because their route matches geographically. They must also be able to reach the pickup point and complete the delivery within a useful time window for the customer.
+A partner should never receive an order merely because they are geographically close or because their route passes near the pickup point.
 
-For a customer request:
+The real question is:
 
-* pickup = **X**
-* drop = **Y**
-* order created at = **T**
-* desired delivery = **ASAP** or a scheduled time
-* acceptable delivery window = a defined time range
+> **Can this partner reach pickup X and deliver to Y within the customer's required time window, with an acceptable detour and reasonable delivery efficiency?**
+
+---
+
+### 10.1 Customer Request
+
+Every order should contain:
+
+```text
+Pickup location = X
+Delivery location = Y
+Order creation time
+Requested items
+Vendor/display name
+Delivery preference
+```
+
+The customer should eventually have two delivery options:
+
+```text
+ASAP
+Schedule for Later
+```
+
+#### ASAP
+
+For an ASAP order, the platform calculates a maximum acceptable delivery window.
+
+Initial MVP hypothesis:
+
+```text
+Maximum ASAP delivery time ≈ 45 minutes
+```
 
 Example:
 
 ```text
 Order created: 4:15 PM
-Desired delivery: around 4:30 PM
-Acceptable delivery window: 4:15 PM – 4:45 PM
+Latest acceptable delivery: approximately 5:00 PM
 ```
 
-### Partner Availability Types
+This value must remain configurable and should later be adjusted using real pilot data.
 
-The system must distinguish between two different partner states.
+#### Schedule for Later
 
-#### 1. On-My-Way / Scheduled Trip Partner
-
-A partner may know in advance that they will travel from **A → B** later.
+A customer may request food for a future time window.
 
 Example:
 
 ```text
-Route: Civil Lines → College Campus
-Trip created: 4:00 PM
-Scheduled departure: 6:00 PM
+Requested delivery:
+6:00 PM – 6:30 PM
 ```
 
-Creating the trip at 4:00 PM does **not** mean the partner is immediately available for delivery.
-
-Their state should be treated as:
-
-```text
-TRIP_SCHEDULED
-Departure: 6:00 PM
-```
-
-If a customer places an ASAP order at 4:15 PM that needs to arrive around 4:30 PM, this partner should not receive the request because they cannot satisfy the delivery time window.
-
-However, if a customer schedules food for around 6:30 PM, this same partner may become a strong candidate.
-
-#### 2. Available-Now Partner
-
-A partner who intentionally wants to perform deliveries immediately can choose:
-
-```text
-AVAILABLE_NOW
-```
-
-For this partner, matching primarily considers:
-
-* current location,
-* distance to pickup,
-* estimated pickup time,
-* estimated delivery time,
-* current availability.
+This makes scheduled on-my-way travellers useful even when they are not leaving immediately.
 
 ---
 
-### Matching Eligibility for On-My-Way Partners
+## 10.2 Partner Availability Types
 
-For an on-my-way partner, the system should evaluate:
+RouteBite must distinguish between two fundamentally different states.
+
+### A. `AVAILABLE_NOW`
+
+This partner is currently available specifically to perform deliveries.
+
+Matching uses:
+
+* current location,
+* distance/time to pickup,
+* estimated pickup time,
+* estimated delivery time,
+* active order status.
+
+Example:
 
 ```text
-Route geometry
+AVAILABLE_NOW
+Current location: 1.2 km from pickup
+```
+
+---
+
+### B. `TRIP_SCHEDULED`
+
+This partner already knows they will travel from A → B at a future time.
+
+Example:
+
+```text
+Route:
+Civil Lines → College Campus
+
+Trip created:
+4:00 PM
+
+Scheduled departure:
+6:00 PM
+
+Departure flexibility:
+±15 minutes
+```
+
+Creating this trip at 4:00 PM does **not** mean the partner is available immediately.
+
+A customer requesting ASAP delivery at 4:15 PM should not be matched with this partner if the partner cannot satisfy the customer's delivery window.
+
+However, the same partner may be suitable for an order scheduled around 6:30 PM.
+
+Once the partner actually starts travelling:
+
+```text
+TRIP_SCHEDULED
+      ↓
+TRIP_ACTIVE
+```
+
+Current location and route progress become more important than the originally scheduled departure time.
+
+---
+
+## 10.3 Hard Eligibility Filtering
+
+Before ranking partners, the platform must first determine whether a partner is actually capable of fulfilling the request.
+
+For an **On-My-Way / Trip Active partner**, eligibility should consider:
+
+```text
+Route compatibility
 +
 Travel direction
 +
-Scheduled departure time
+Scheduled/actual departure
 +
-Current location / trip progress
+Current location
 +
-Estimated pickup time
+Current route progress
 +
-Estimated delivery time
+Pickup reachability
 +
-Allowed detour
+Predicted pickup time
++
+Predicted delivery time
++
+Additional detour
 +
 Customer delivery window
 ```
 
-A partner should only become an eligible candidate when:
+Conceptually:
 
 ```text
-routeCompatible
-AND
-directionCompatible
-AND
-pickupReachable
-AND
-detourAcceptable
-AND
-deliveryWithinCustomerWindow
+eligible =
+    routeCompatible
+    AND directionCompatible
+    AND pickupReachable
+    AND detourAcceptable
+    AND deliveryWithinCustomerWindow
+```
+
+A partner failing any critical eligibility condition should not receive the order.
+
+---
+
+## 10.4 Route Direction and Progress
+
+The route should be represented using route geometry/polyline data from the mapping system.
+
+For a route:
+
+```text
+A ───── Partner ───── X ───── Y ───── B
+```
+
+where:
+
+* Partner = current location,
+* X = pickup,
+* Y = customer destination,
+
+this is generally a good directional match.
+
+But:
+
+```text
+A ───── X ───── Partner ───── Y ───── B
+```
+
+means the partner may already have passed the pickup point.
+
+If fulfilling the order requires significant backward travel, the request should normally be rejected.
+
+The system should therefore track:
+
+```text
+routeId
+currentLocation
+progressAlongRoute
+tripStatus
+lastLocationUpdate
 ```
 
 ---
 
-### Important: Closest Departure Time Alone Is Not Enough
+## 10.5 Acceptable Detour
 
-The system should **not simply select the partner whose departure time is closest to the customer's order time**.
+Detour should not be judged only by distance.
+
+A 1 km detour may take:
+
+```text
+3 minutes on an empty road
+```
+
+or:
+
+```text
+15 minutes in a crowded market
+```
+
+Therefore both **additional travel time and additional distance** should be considered.
+
+Initial configurable MVP hypothesis:
+
+```text
+MAX_ROUTE_DETOUR_MINUTES = 10
+MAX_ROUTE_DETOUR_KM = 1.5
+```
+
+Example:
+
+```text
+Normal trip:
+25 minutes
+
+Trip with order:
+32 minutes
+
+Additional detour:
+7 minutes
+
+Result:
+Eligible
+```
+
+But:
+
+```text
+Normal trip:
+20 minutes
+
+Trip with order:
+38 minutes
+
+Additional detour:
+18 minutes
+
+Result:
+Not eligible
+```
+
+These values are hypotheses and must be validated using real pilot data.
+
+---
+
+## 10.6 Predicted Pickup and Delivery Time
+
+RouteBite should not build its own navigation engine for the MVP.
+
+A mapping/routing provider should provide travel-time estimates.
+
+For an `AVAILABLE_NOW` partner:
+
+```text
+Current time
++
+ETA(current location → pickup)
++
+Estimated vendor waiting/pickup time
++
+ETA(pickup → customer)
+=
+Predicted Delivery Time
+```
+
+Example:
+
+```text
+Current time          4:15 PM
+Reach pickup          +6 min
+Pickup/wait           +8 min
+Pickup → customer     +12 min
+
+Predicted delivery    4:41 PM
+```
+
+For scheduled travellers:
+
+```text
+Scheduled/actual departure
++
+ETA to pickup
++
+Estimated pickup wait
++
+ETA to customer
+=
+Predicted Delivery Time
+```
+
+Initially, vendor waiting time may use a simple configurable estimate.
+
+Later, RouteBite can learn average pickup times by area/vendor/time-of-day from real order data.
+
+---
+
+## 10.7 Closest Departure Time Is Not Enough
+
+The system should **not simply choose the traveller whose departure time is closest to the customer's order time**.
 
 Example:
 
 ```text
 Partner A
 Departure: 4:20 PM
-Distance from pickup: 20 minutes
+20 minutes away from pickup
 
 Partner B
 Departure: 4:25 PM
-Distance from pickup: 3 minutes
+3 minutes away from pickup
 ```
 
-Although Partner A leaves earlier, Partner B may still reach the pickup and customer sooner.
+Partner B may reach the pickup and customer earlier even though they depart later.
 
-Therefore, the important values are:
+Therefore, matching should prioritize:
 
 ```text
 Predicted Pickup Time
@@ -369,130 +586,343 @@ Departure Time Difference
 
 ---
 
-### Example
+## 10.8 Candidate Types
 
-Customer request:
+After eligibility filtering, potential candidates can come from two supply groups.
 
-```text
-Order created: 4:15 PM
-Pickup: X
-Drop: Y
-Latest acceptable delivery: 4:45 PM
-```
+### Candidate Type 1 — On-My-Way Partner
 
-#### Partner P1
+A partner whose existing journey:
 
-```text
-Route: A → B
-Departure: 6:00 PM
-Predicted pickup: 6:12 PM
-Predicted delivery: 6:35 PM
+* passes sufficiently close to pickup,
+* moves in the correct direction,
+* has not significantly passed the pickup point,
+* produces an acceptable detour,
+* and can satisfy the customer's delivery window.
 
-Result: NOT ELIGIBLE
-```
-
-The route may match geographically, but the time does not.
-
-#### Partner P2
-
-```text
-Route: A → B
-Departure: 4:20 PM
-Predicted pickup: 4:27 PM
-Predicted delivery: 4:41 PM
-
-Result: ELIGIBLE
-```
-
-#### Partner P3
-
-```text
-Status: AVAILABLE_NOW
-Current location: 1.2 km from X
-Predicted pickup: 4:25 PM
-Predicted delivery: 4:42 PM
-
-Result: ELIGIBLE
-```
-
-P2 and P3 can then move to the ranking stage.
+Because this partner is already travelling toward the destination, this may be the most efficient fulfilment option.
 
 ---
 
-### Active Trip Progress
+### Candidate Type 2 — Available-Now Partner
 
-Once an on-my-way partner has started travelling, the original departure time becomes less important than their **current location and progress along the route**.
+A partner who is actively online for delivery work and:
 
-Example:
+* is sufficiently close to the pickup,
+* can reach it quickly,
+* and can deliver within the customer's required time window.
 
-```text
-A ───── Partner ───── X ───── Y ───── B
-```
-
-If the partner has not yet passed pickup X, the request may still be feasible.
-
-But:
-
-```text
-A ───── X ───── Partner ───── Y ───── B
-```
-
-If the partner has already passed X and would need to travel significantly backwards, the request may be rejected because of excessive detour.
+This supply type acts as an important fallback when no suitable on-my-way traveller exists.
 
 ---
 
-### Candidate Priority
+## 10.9 Ranking Eligible Partners
 
-Potential supply can include:
+Only eligible partners should enter the ranking stage.
 
-#### Candidate Type 1 — Compatible On-My-Way Partner
+The MVP should initially use **deterministic rule-based ranking**, not machine learning.
 
-A partner whose existing or scheduled route:
+Candidate ranking should consider factors such as:
 
-* passes sufficiently close to pickup X,
-* moves in a compatible direction toward Y,
-* has not already passed the useful pickup point,
-* creates an acceptable detour,
-* and can complete delivery within the customer's required time window.
+1. ability to satisfy the delivery SLA,
+2. predicted delivery ETA,
+3. additional route detour,
+4. partner reliability/completion history,
+5. partner rating,
+6. delivery economics.
 
-#### Candidate Type 2 — Available-Now Partner
+Rating should not automatically dominate the ranking.
 
-A partner who is currently online for delivery work and:
+For example:
 
-* is sufficiently close to X,
-* can reach the pickup quickly,
-* and can deliver to Y within the customer's acceptable time window.
+```text
+Partner A
+Rating: 4.9
+Delivery ETA: 70 minutes
 
-After eligibility filtering, candidates can be ranked using factors such as:
+Partner B
+Rating: 4.7
+Delivery ETA: 28 minutes
+```
 
-* predicted pickup ETA,
-* predicted delivery ETA,
-* additional detour,
-* partner rating,
-* expected delivery cost,
-* acceptance probability,
-* route efficiency.
+If both are trusted and reliable, Partner B is likely the better operational choice.
 
-The exact ranking formula is not yet finalized.
+The exact scoring formula will be designed later.
 
 ---
 
-### Important Matching Questions Still to Be Designed
+## 10.10 Dispatch Strategy
 
-* What should the default delivery-time tolerance be for ASAP orders?
-* Should customers be allowed to choose `ASAP` or `Schedule for later`?
-* What is the acceptable detour for an on-my-way partner?
-* How should route direction compatibility be calculated?
-* How should current trip progress be represented?
-* How are predicted pickup and delivery times calculated?
-* How are eligible partners ranked?
-* How many partners receive an offer at once?
-* How long does each offer remain valid?
-* What happens if nobody accepts?
-* Should incentives increase when supply is low?
-* How much flexibility can a scheduled traveller specify around their departure time?
+RouteBite should **not broadcast every order to every nearby partner**.
 
-Detailed technical logic will live in `MATCHING_ENGINE.md`.
+Doing so would create notification spam and poor partner experience.
+
+Instead, eligible partners should be ranked and contacted in controlled batches.
+
+Initial MVP hypothesis:
+
+```text
+Round 1
+Send request to top 3 candidates
+
+Wait approximately 20 seconds
+```
+
+If nobody accepts:
+
+```text
+Round 2
+Send request to next candidates
+```
+
+If the request is still unaccepted:
+
+```text
+Round 3
+Broaden matching constraints slightly
+and/or consider additional incentive
+```
+
+Initial configurable values:
+
+```text
+OFFER_BATCH_SIZE = 3
+OFFER_TIMEOUT_SECONDS = 20
+```
+
+These must be validated through pilot behaviour.
+
+---
+
+## 10.11 Order Acceptance
+
+If multiple partners attempt to accept an order at nearly the same time, only **one partner may win the assignment**.
+
+The transition must behave atomically:
+
+```text
+REQUESTED
+    ↓
+PARTNER ACCEPTS
+    ↓
+ASSIGNED
+```
+
+Once assigned:
+
+```text
+ASSIGNED_TO_PARTNER_P1
+```
+
+another partner attempting acceptance should receive:
+
+```text
+Order already assigned
+```
+
+The exact concurrency implementation will be defined during backend/database design.
+
+---
+
+## 10.12 What Happens If Nobody Accepts?
+
+The system should degrade gracefully rather than leaving the customer waiting indefinitely.
+
+Conceptual fallback flow:
+
+```text
+Strict on-route matching
+        ↓
+AVAILABLE_NOW partners
+        ↓
+Broader acceptable radius/detour
+        ↓
+Higher delivery incentive
+        ↓
+No feasible partner
+```
+
+If no suitable partner can fulfil the request, the customer should receive a clear response such as:
+
+```text
+No partner is currently available for immediate delivery.
+```
+
+Possible options:
+
+```text
+Try Again
+Schedule for Later
+Notify Me When a Partner Is Available
+```
+
+The platform should never pretend that supply is guaranteed when it is not.
+
+---
+
+## 10.13 Supply-Based Incentives
+
+If eligible partners repeatedly reject an order, RouteBite may increase the partner incentive.
+
+Simple MVP example:
+
+```text
+Initial partner earning: ₹40
+
+No acceptance:
+₹50
+
+Still no acceptance:
+₹60
+```
+
+The system must explicitly track who funds the additional incentive:
+
+```text
+Customer
+Platform subsidy
+or
+Combination
+```
+
+Any company-funded subsidy must be measured separately so that pilot economics are not mistaken for sustainable unit economics.
+
+Complex surge-pricing algorithms are **not required for V1**.
+
+---
+
+## 10.14 Scheduled Traveller Flexibility
+
+Scheduled travellers should not be forced to provide an unrealistically exact departure time.
+
+Example UI:
+
+```text
+Leaving around:
+6:00 PM
+
+Departure flexibility:
+±10 min
+±15 min
+±30 min
+```
+
+Initial default hypothesis:
+
+```text
+DEFAULT_DEPARTURE_FLEX_MINUTES = 15
+```
+
+Internally:
+
+```text
+scheduledDeparture = 6:00 PM
+
+earliestDeparture = 5:45 PM
+latestDeparture = 6:15 PM
+```
+
+Matching can use this interval when evaluating scheduled orders.
+
+---
+
+## 10.15 Complete Matching Pipeline
+
+Conceptually, the matching system should operate as:
+
+```text
+CUSTOMER REQUEST
+      │
+      ▼
+Pickup X + Drop Y
++ Delivery Time Window
+      │
+      ▼
+DISCOVER POSSIBLE PARTNERS
+      │
+ ┌────┴───────────────┐
+ ▼                    ▼
+ON-MY-WAY        AVAILABLE_NOW
+PARTNERS             PARTNERS
+ │                    │
+ └─────────┬──────────┘
+           ▼
+    HARD ELIGIBILITY
+           │
+      route valid?
+      direction valid?
+      pickup reachable?
+      time compatible?
+      detour acceptable?
+           │
+           ▼
+         RANK
+           │
+     Delivery ETA
+     Detour
+     Reliability
+     Rating
+     Economics
+           │
+           ▼
+       OFFER BATCH
+           │
+     Wait for acceptance
+           │
+      ┌────┴────┐
+      ▼         ▼
+   ACCEPTED     NO
+      │         │
+      ▼         ▼
+ ASSIGN      NEXT BATCH
+ ORDER           │
+                 ▼
+          BROADEN / INCENTIVE
+                 │
+                 ▼
+          FAIL GRACEFULLY
+```
+
+---
+
+## 10.16 Initial Configurable MVP Hypotheses
+
+The following values are **starting hypotheses, not finalized business rules**:
+
+```text
+MAX_ASAP_DELIVERY_MINUTES = 45
+
+MAX_ROUTE_DETOUR_MINUTES = 10
+
+MAX_ROUTE_DETOUR_KM = 1.5
+
+OFFER_BATCH_SIZE = 3
+
+OFFER_TIMEOUT_SECONDS = 20
+
+DEFAULT_DEPARTURE_FLEX_MINUTES = 15
+```
+
+These values must be kept configurable rather than scattered as hardcoded constants throughout the system.
+
+The campus pilot should collect enough operational data to determine whether these assumptions are correct.
+
+---
+
+## 10.17 Matching Principle
+
+The core matching principle is:
+
+> **Filter first, rank second, dispatch third.**
+
+RouteBite should first remove partners who cannot realistically fulfil the order, then rank the remaining candidates, and only then send controlled delivery offers.
+
+The MVP should begin with a transparent deterministic matching system.
+
+Machine-learning-based ranking should only be considered later when RouteBite has enough real-world order, acceptance, ETA, cancellation, and partner-behaviour data to justify it.
+
+Detailed implementation will live in `MATCHING_ENGINE.md`.
+
 
 ## 11. Payment Model — Initial Proposed Direction
 
