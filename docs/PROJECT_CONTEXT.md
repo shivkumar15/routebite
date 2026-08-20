@@ -229,38 +229,270 @@ This is **not yet treated as a final product decision** and must be explicitly c
 
 ---
 
-## 10. Matching — Product Requirement
+## 10. Matching — Spatial + Temporal Product Requirement
 
-Matching should reason about **locations and movement**, not only vendor names.
+Matching must reason about **location, movement, and time**.
 
-For a request:
+A partner should not receive a request merely because their route matches geographically. They must also be able to reach the pickup point and complete the delivery within a useful time window for the customer.
 
-- pickup = **X**
-- drop = **Y**
+For a customer request:
 
-Potential supply includes:
+* pickup = **X**
+* drop = **Y**
+* order created at = **T**
+* desired delivery = **ASAP** or a scheduled time
+* acceptable delivery window = a defined time range
 
-### Priority candidate type 1
+Example:
 
-A partner whose already-planned **A → B route** passes sufficiently close to X and then toward Y in a compatible direction.
+```text
+Order created: 4:15 PM
+Desired delivery: around 4:30 PM
+Acceptable delivery window: 4:15 PM – 4:45 PM
+```
 
-### Priority candidate type 2
+### Partner Availability Types
 
-A partner who is currently **Online** and sufficiently close to X to make a dedicated delivery.
+The system must distinguish between two different partner states.
 
-Important matching questions still to be designed:
+#### 1. On-My-Way / Scheduled Trip Partner
 
-- What is an acceptable detour from an on-my-way route?
-- How is route direction compatibility measured?
-- How are candidates ranked?
-- How many partners receive an offer at once?
-- How long does an offer remain valid?
-- What happens if nobody accepts?
-- Should incentives increase when supply is low?
+A partner may know in advance that they will travel from **A → B** later.
 
-Detailed logic will live in `MATCHING_ENGINE.md`.
+Example:
+
+```text
+Route: Civil Lines → College Campus
+Trip created: 4:00 PM
+Scheduled departure: 6:00 PM
+```
+
+Creating the trip at 4:00 PM does **not** mean the partner is immediately available for delivery.
+
+Their state should be treated as:
+
+```text
+TRIP_SCHEDULED
+Departure: 6:00 PM
+```
+
+If a customer places an ASAP order at 4:15 PM that needs to arrive around 4:30 PM, this partner should not receive the request because they cannot satisfy the delivery time window.
+
+However, if a customer schedules food for around 6:30 PM, this same partner may become a strong candidate.
+
+#### 2. Available-Now Partner
+
+A partner who intentionally wants to perform deliveries immediately can choose:
+
+```text
+AVAILABLE_NOW
+```
+
+For this partner, matching primarily considers:
+
+* current location,
+* distance to pickup,
+* estimated pickup time,
+* estimated delivery time,
+* current availability.
 
 ---
+
+### Matching Eligibility for On-My-Way Partners
+
+For an on-my-way partner, the system should evaluate:
+
+```text
+Route geometry
++
+Travel direction
++
+Scheduled departure time
++
+Current location / trip progress
++
+Estimated pickup time
++
+Estimated delivery time
++
+Allowed detour
++
+Customer delivery window
+```
+
+A partner should only become an eligible candidate when:
+
+```text
+routeCompatible
+AND
+directionCompatible
+AND
+pickupReachable
+AND
+detourAcceptable
+AND
+deliveryWithinCustomerWindow
+```
+
+---
+
+### Important: Closest Departure Time Alone Is Not Enough
+
+The system should **not simply select the partner whose departure time is closest to the customer's order time**.
+
+Example:
+
+```text
+Partner A
+Departure: 4:20 PM
+Distance from pickup: 20 minutes
+
+Partner B
+Departure: 4:25 PM
+Distance from pickup: 3 minutes
+```
+
+Although Partner A leaves earlier, Partner B may still reach the pickup and customer sooner.
+
+Therefore, the important values are:
+
+```text
+Predicted Pickup Time
+Predicted Delivery Time
+```
+
+rather than only:
+
+```text
+Departure Time Difference
+```
+
+---
+
+### Example
+
+Customer request:
+
+```text
+Order created: 4:15 PM
+Pickup: X
+Drop: Y
+Latest acceptable delivery: 4:45 PM
+```
+
+#### Partner P1
+
+```text
+Route: A → B
+Departure: 6:00 PM
+Predicted pickup: 6:12 PM
+Predicted delivery: 6:35 PM
+
+Result: NOT ELIGIBLE
+```
+
+The route may match geographically, but the time does not.
+
+#### Partner P2
+
+```text
+Route: A → B
+Departure: 4:20 PM
+Predicted pickup: 4:27 PM
+Predicted delivery: 4:41 PM
+
+Result: ELIGIBLE
+```
+
+#### Partner P3
+
+```text
+Status: AVAILABLE_NOW
+Current location: 1.2 km from X
+Predicted pickup: 4:25 PM
+Predicted delivery: 4:42 PM
+
+Result: ELIGIBLE
+```
+
+P2 and P3 can then move to the ranking stage.
+
+---
+
+### Active Trip Progress
+
+Once an on-my-way partner has started travelling, the original departure time becomes less important than their **current location and progress along the route**.
+
+Example:
+
+```text
+A ───── Partner ───── X ───── Y ───── B
+```
+
+If the partner has not yet passed pickup X, the request may still be feasible.
+
+But:
+
+```text
+A ───── X ───── Partner ───── Y ───── B
+```
+
+If the partner has already passed X and would need to travel significantly backwards, the request may be rejected because of excessive detour.
+
+---
+
+### Candidate Priority
+
+Potential supply can include:
+
+#### Candidate Type 1 — Compatible On-My-Way Partner
+
+A partner whose existing or scheduled route:
+
+* passes sufficiently close to pickup X,
+* moves in a compatible direction toward Y,
+* has not already passed the useful pickup point,
+* creates an acceptable detour,
+* and can complete delivery within the customer's required time window.
+
+#### Candidate Type 2 — Available-Now Partner
+
+A partner who is currently online for delivery work and:
+
+* is sufficiently close to X,
+* can reach the pickup quickly,
+* and can deliver to Y within the customer's acceptable time window.
+
+After eligibility filtering, candidates can be ranked using factors such as:
+
+* predicted pickup ETA,
+* predicted delivery ETA,
+* additional detour,
+* partner rating,
+* expected delivery cost,
+* acceptance probability,
+* route efficiency.
+
+The exact ranking formula is not yet finalized.
+
+---
+
+### Important Matching Questions Still to Be Designed
+
+* What should the default delivery-time tolerance be for ASAP orders?
+* Should customers be allowed to choose `ASAP` or `Schedule for later`?
+* What is the acceptable detour for an on-my-way partner?
+* How should route direction compatibility be calculated?
+* How should current trip progress be represented?
+* How are predicted pickup and delivery times calculated?
+* How are eligible partners ranked?
+* How many partners receive an offer at once?
+* How long does each offer remain valid?
+* What happens if nobody accepts?
+* Should incentives increase when supply is low?
+* How much flexibility can a scheduled traveller specify around their departure time?
+
+Detailed technical logic will live in `MATCHING_ENGINE.md`.
 
 ## 11. Payment Model — Initial Proposed Direction
 
