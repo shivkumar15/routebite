@@ -1121,30 +1121,895 @@ At the current stage, the following are treated as confirmed:
 
 ---
 
-## 19. Open Product Decisions
+## 19. Prototype Decisions, Deferred Decisions, and Remaining Open Questions
 
-These must be resolved before or during detailed design:
+RouteBite is currently being designed as a **working prototype for idea validation and presentation**, not as a fully production-ready commercial platform.
 
-- Automatic matching vs customer browsing/selecting partners.
-- Exact matching/ranking algorithm.
-- Maximum acceptable on-route detour.
-- Partner-offer fanout strategy.
-- Pricing formula.
-- Minimum partner earning.
-- Customer delivery/platform fees.
-- Exact payment and settlement flow.
-- Price-change approval mechanics.
-- Cancellation/refund policy.
-- Partner KYC requirements.
-- Food handling/liability policy.
-- Dispute-resolution process.
-- Map/navigation provider.
-- Real-time tracking granularity.
-- Notification channels.
-- Admin/operations requirements.
-- Final brand/product name.
+Therefore, decisions that are necessary to demonstrate the complete product workflow should be fixed now using simple, configurable approaches.
+
+Problems involving production-grade payments, regulatory compliance, government-backed KYC, advanced fraud prevention, large-scale optimization, and legal liability can be handled after the idea is validated or selected.
+
+The principle for the prototype is:
+
+> **Build enough real functionality to prove that the complete RouteBite workflow works, while avoiding premature production complexity.**
 
 ---
+
+### 19.1 Automatic Matching vs Customer Browsing Partners
+
+**Prototype Decision: Automatic Matching**
+
+The customer should not manually browse multiple travellers and contact them individually.
+
+The customer creates a request containing:
+
+```text
+Requested food
+Vendor/display name
+Pickup location
+Delivery location
+ASAP / Scheduled delivery
+```
+
+The platform then:
+
+```text
+Creates request
+      ↓
+Finds eligible partners
+      ↓
+Ranks candidates
+      ↓
+Sends delivery offer
+      ↓
+Partner accepts
+      ↓
+Customer sees assigned partner
+```
+
+Chat/call can still be available after assignment when clarification is required.
+
+**Status: CONFIRMED FOR PROTOTYPE**
+
+---
+
+### 19.2 Matching Algorithm
+
+**Prototype Decision: Deterministic Rule-Based Matching**
+
+Machine learning is not required initially.
+
+Matching should use:
+
+```text
+Location
+Route
+Travel direction
+Time compatibility
+Current trip progress
+Pickup ETA
+Delivery ETA
+Detour
+Partner availability
+```
+
+The system should follow:
+
+```text
+Filter
+  ↓
+Rank
+  ↓
+Dispatch
+```
+
+Detailed logic is documented in Point 10 and will later be expanded in `MATCHING_ENGINE.md`.
+
+**Status: CONFIRMED FOR PROTOTYPE**
+
+---
+
+### 19.3 Maximum Acceptable On-Route Detour
+
+Initial configurable hypothesis:
+
+```text
+MAX_ROUTE_DETOUR_MINUTES = 10
+MAX_ROUTE_DETOUR_KM = 1.5
+```
+
+A partner should normally not receive an on-my-way request when fulfilling it creates a significantly larger detour.
+
+These values are not permanent business rules. They must be validated using pilot data.
+
+**Status: PROTOTYPE HYPOTHESIS**
+
+---
+
+### 19.4 Partner Offer / Fanout Strategy
+
+Orders should not be broadcast to every available partner.
+
+Initial dispatch strategy:
+
+```text
+Round 1:
+Send offer to top 3 eligible partners
+
+Wait approximately 20 seconds
+
+Round 2:
+Send to next eligible candidates
+
+If still unaccepted:
+Broaden matching constraints slightly
+and/or increase partner incentive
+```
+
+Initial configuration:
+
+```text
+OFFER_BATCH_SIZE = 3
+OFFER_TIMEOUT_SECONDS = 20
+```
+
+**Status: PROTOTYPE HYPOTHESIS**
+
+---
+
+### 19.5 ASAP Delivery Window
+
+For the prototype:
+
+```text
+MAX_ASAP_DELIVERY_MINUTES = 45
+```
+
+Example:
+
+```text
+Order created: 4:15 PM
+
+Latest expected delivery:
+approximately 5:00 PM
+```
+
+Partners predicted to deliver after the acceptable window should not receive the request.
+
+This value must remain configurable.
+
+**Status: PROTOTYPE HYPOTHESIS**
+
+---
+
+### 19.6 Scheduled Orders
+
+The customer should eventually have:
+
+```text
+ASAP
+Schedule for Later
+```
+
+Scheduled delivery is particularly valuable because RouteBite supports travellers who know in advance that they will travel from A → B later.
+
+Example:
+
+```text
+Customer wants delivery:
+6:00 PM – 6:30 PM
+
+Partner trip:
+Civil Lines → Campus
+Leaving around 5:45 PM
+```
+
+This can become a valid match.
+
+**Status: CONFIRMED PRODUCT DIRECTION**
+
+---
+
+### 19.7 Scheduled Traveller Flexibility
+
+A traveller should not be forced to provide an exact departure time.
+
+Example:
+
+```text
+Leaving around:
+6:00 PM
+
+Flexibility:
+±15 minutes
+```
+
+Initial default:
+
+```text
+DEFAULT_DEPARTURE_FLEX_MINUTES = 15
+```
+
+Possible UI options:
+
+```text
+±10 min
+±15 min
+±30 min
+```
+
+**Status: PROTOTYPE HYPOTHESIS**
+
+---
+
+## 19.8 Prototype Pricing
+
+The pricing system should remain deliberately simple during the prototype.
+
+Illustrative initial model:
+
+```text
+Food estimated cost: entered by customer
+
+Partner delivery earning: ₹40
+
+Platform fee: ₹10
+```
+
+Example:
+
+```text
+Food estimate        ₹200
+Delivery earning      ₹40
+Platform fee          ₹10
+--------------------------
+Estimated total      ₹250
+```
+
+The actual values must remain configurable.
+
+The prototype should not yet implement:
+
+```text
+Complex surge pricing
+Demand forecasting
+ML pricing
+Advanced distance-based optimization
+```
+
+**Status: PROTOTYPE HYPOTHESIS**
+
+---
+
+## 19.9 Minimum Partner Earning
+
+Initial prototype hypothesis:
+
+```text
+DEFAULT_PARTNER_EARNING = ₹40
+```
+
+If an order repeatedly fails to receive acceptance, incentive tiers may be simulated:
+
+```text
+₹40
+ ↓
+₹50
+ ↓
+₹60
+```
+
+The platform must record whether additional incentive is funded by:
+
+```text
+Customer
+Platform subsidy
+Combination
+```
+
+These values are not considered validated economics.
+
+**Status: PROTOTYPE HYPOTHESIS**
+
+---
+
+## 19.10 Payment System
+
+Production-grade payment settlement is intentionally deferred.
+
+For the working prototype, RouteBite should use:
+
+```text
+Razorpay Test Mode
++
+Internal Demo Ledger
+```
+
+No real money needs to move during the demonstration.
+
+Prototype payment flow:
+
+```text
+Customer Checkout
+      ↓
+Test Payment Successful
+      ↓
+Order Activated
+      ↓
+Partner Assigned
+      ↓
+Pickup
+      ↓
+Delivery
+      ↓
+OTP Verification
+      ↓
+Partner Earning Recorded
+      ↓
+Demo Settlement
+```
+
+Example internal ledger:
+
+```text
+Food reimbursement = ₹200
+
+Partner earning = ₹40
+
+Platform fee = ₹10
+```
+
+Possible prototype states:
+
+```text
+PAYMENT_PENDING
+
+TEST_PAYMENT_SUCCESS
+
+ORDER_ACTIVE
+
+DELIVERED
+
+PARTNER_EARNING_RECORDED
+
+DEMO_SETTLED
+```
+
+This allows the prototype to demonstrate the complete payment experience without introducing real settlement complexity.
+
+Production payment design will later require proper marketplace settlement, refunds, payouts, compliance, and payment-provider review.
+
+**Status: CONFIRMED FOR PROTOTYPE**
+
+---
+
+## 19.11 Price Change Approval
+
+Because unregistered/local vendors may not have fixed digital menus, actual food cost may differ from the customer's estimate.
+
+Example:
+
+```text
+Estimated food cost:
+₹200
+
+Actual vendor bill:
+₹220
+```
+
+The partner should enter the actual bill and may upload purchase proof.
+
+Customer receives:
+
+```text
+Estimated: ₹200
+Actual: ₹220
+
+Additional amount: ₹20
+
+[Approve]
+[Contact Partner]
+```
+
+During the prototype, approval updates the internal/demo payment value.
+
+Production authorization/capture logic can be designed later.
+
+**Status: CONFIRMED FOR PROTOTYPE**
+
+---
+
+## 19.12 Cancellation Rules
+
+Prototype cancellation should remain simple.
+
+### Before Food Purchase
+
+States such as:
+
+```text
+REQUESTED
+MATCHING
+ASSIGNED
+```
+
+Customer cancellation can be allowed.
+
+### After Food Purchase
+
+Once:
+
+```text
+PICKED_UP
+```
+
+is reached, unrestricted cancellation should no longer be available.
+
+The order may require admin/support intervention.
+
+### Partner Cancellation Before Pickup
+
+The platform should attempt rematching.
+
+### Partner Cancellation After Purchase
+
+The case should move to manual admin intervention.
+
+Production-grade refund/penalty rules are deferred.
+
+**Status: CONFIRMED FOR PROTOTYPE**
+
+---
+
+# 19.13 Partner Identity Verification
+
+Production-grade KYC is intentionally deferred.
+
+For the campus prototype, RouteBite should use:
+
+```text
+Phone OTP verification
++
+Profile photo
++
+College identity
++
+Manual admin approval
+```
+
+Possible registration information:
+
+```text
+Name
+Phone number
+College email / enrollment information
+College ID upload
+Profile photo
+```
+
+Partner states:
+
+```text
+PENDING_VERIFICATION
+        ↓
+APPROVED
+```
+
+Approved campus partners may display:
+
+```text
+Campus Partner Verified
+```
+
+RouteBite should **not claim that this is government-backed KYC**.
+
+Full Aadhaar document collection should not be necessary for the campus prototype.
+
+For future city/professional-partner deployment, RouteBite should evaluate compliant identity/KYC providers or officially supported verification mechanisms.
+
+**Status: CONFIRMED FOR CAMPUS PROTOTYPE**
+
+---
+
+## 19.14 Map and Navigation Provider
+
+**Prototype Decision: Google Maps Platform**
+
+The prototype requires:
+
+```text
+Interactive map
+Pickup pin
+Drop pin
+Place search
+Geocoding
+Routes
+Distance
+ETA
+Route Matrix
+```
+
+Vendor search behaviour:
+
+```text
+Search vendor/place
+       ↓
+Found?
+ ├── Yes → select location
+ │
+ └── No → manually drop pickup pin
+```
+
+This preserves RouteBite's core rule that a vendor does not need to exist in RouteBite's own database.
+
+Google Maps usage should be protected using:
+
+```text
+Restricted API keys
+Billing alerts
+API quotas
+Controlled route calculations
+```
+
+**Status: CONFIRMED FOR PROTOTYPE**
+
+---
+
+## 19.15 Real-Time Location Tracking
+
+RouteBite should not continuously track every partner at high frequency.
+
+### Before Assignment
+
+For an `AVAILABLE_NOW` partner, location can be updated periodically for matching.
+
+### During Active Delivery
+
+After accepting an order:
+
+```text
+ORDER_ACTIVE
+```
+
+the partner's foreground location may be sent approximately every:
+
+```text
+10–15 seconds
+```
+
+The customer may see:
+
+```text
+Current partner location
+Order state
+Estimated arrival
+```
+
+After delivery:
+
+```text
+Stop active tracking
+```
+
+For the web prototype, foreground location tracking is sufficient.
+
+Reliable background tracking on mobile devices can be solved later using a native/mobile application strategy.
+
+**Status: CONFIRMED FOR PROTOTYPE**
+
+---
+
+## 19.16 Notifications
+
+The prototype should begin with:
+
+```text
+In-app notifications
++
+Phone OTP
+```
+
+Examples for partners:
+
+```text
+New delivery request
+Earn ₹40
+Accept / Reject
+```
+
+Examples for customers:
+
+```text
+Partner found
+
+Partner reached pickup
+
+Food picked up
+
+Partner arriving
+
+Order delivered
+```
+
+The prototype does not initially require:
+
+```text
+WhatsApp notifications
+SMS status notifications
+Email notifications
+Full push-notification infrastructure
+```
+
+These may be added later.
+
+**Status: CONFIRMED FOR PROTOTYPE**
+
+---
+
+## 19.17 Admin / Operations Dashboard
+
+A basic admin dashboard is required even for the prototype.
+
+The admin should be able to view:
+
+```text
+Pending partner verification
+Approved/rejected partners
+Active partners
+Orders
+Order states
+Failed orders
+Uploaded identity documents
+Purchase receipts
+Reported problems
+```
+
+Possible actions:
+
+```text
+Approve partner
+Reject partner
+Review order
+Cancel order
+Mark dispute
+Review purchase proof
+```
+
+During early-stage validation, manual operations are acceptable and can replace complex automation.
+
+**Status: CONFIRMED FOR PROTOTYPE**
+
+---
+
+# 19.18 Deferred Production Decisions
+
+The following should **not block the working prototype**.
+
+They require deeper legal, financial, security, or operational discussion after the idea is validated.
+
+### Production Payments
+
+Deferred:
+
+```text
+Real customer settlement
+Partner bank payouts
+Marketplace split settlements
+Payment authorization/capture
+Production refund automation
+Settlement reconciliation
+Payment compliance
+```
+
+---
+
+### Production Identity / KYC
+
+Deferred:
+
+```text
+Government-backed KYC
+Aadhaar-based verification
+Professional partner verification
+External KYC providers
+Document authenticity verification
+Bank-account identity matching
+```
+
+---
+
+### Food Handling and Liability
+
+Deferred:
+
+```text
+Food tampering liability
+Vendor quality responsibility
+Packaging standards
+Delivery damage
+Food safety policy
+Legal terms between customer, partner and platform
+```
+
+These issues must be solved before a real commercial launch.
+
+---
+
+### Advanced Dispute Resolution
+
+Deferred:
+
+```text
+Automated refunds
+Fraud scoring
+Chargeback handling
+Evidence arbitration
+Partner/customer penalties
+Account suspension algorithms
+```
+
+For the prototype, admin intervention is sufficient.
+
+---
+
+### Advanced Pricing
+
+Deferred:
+
+```text
+Dynamic surge pricing
+Supply-demand prediction
+ML pricing
+Personalized incentives
+Automated subsidy optimization
+```
+
+---
+
+### Advanced Matching
+
+Deferred:
+
+```text
+Machine-learning ranking
+Batch delivery optimization
+Multi-order routing
+Acceptance prediction
+Demand forecasting
+Advanced route optimization
+```
+
+The prototype will use deterministic matching.
+
+---
+
+## 19.19 Remaining Open Decisions Before Implementation
+
+After the above prototype decisions, only a smaller set of product questions should remain open.
+
+These include:
+
+* exact frontend experience for consumer vs partner,
+* whether consumer and partner use one app or separate interfaces,
+* exact order status/state machine,
+* exact partner rating model,
+* exact reliability score definition,
+* exact admin dashboard fields,
+* exact vendor wait-time assumption,
+* exact architecture and tech stack,
+* database design,
+* API contracts,
+* authentication/session architecture,
+* real-time communication architecture,
+* final product/brand name.
+
+These should be resolved during product-flow, architecture, database, and tech-stack design.
+
+---
+
+## 19.20 Prototype Scope Boundary
+
+The first working RouteBite prototype should be able to demonstrate:
+
+```text
+PARTNER
+
+Register
+   ↓
+Phone verification
+   ↓
+College ID / profile verification
+   ↓
+Admin approval
+   ↓
+Choose:
+
+AVAILABLE_NOW
+
+or
+
+TRIP_SCHEDULED
+```
+
+Customer flow:
+
+```text
+CUSTOMER
+
+Create food request
+   ↓
+Search vendor or choose pickup pin
+   ↓
+Choose destination
+   ↓
+ASAP / Scheduled
+   ↓
+See estimated price
+   ↓
+Complete test payment
+   ↓
+Automatic matching
+   ↓
+Partner accepts
+   ↓
+Customer sees partner
+   ↓
+Partner reaches pickup
+   ↓
+Actual food cost confirmed
+   ↓
+Food picked up
+   ↓
+Live delivery tracking
+   ↓
+OTP handoff
+   ↓
+Order completed
+   ↓
+Demo partner payout recorded
+   ↓
+Rating
+```
+
+Admin flow:
+
+```text
+ADMIN
+
+Verify partners
+Monitor orders
+Review receipts
+Handle failed orders
+Resolve prototype disputes manually
+```
+
+If these flows work end-to-end, RouteBite has enough functionality to demonstrate the central product thesis.
+
+Production complexity should only be added after the idea is validated.
+
+---
+
+## 19.21 Current Engineering Principle
+
+For the prototype:
+
+> **Working end-to-end behaviour is more important than production-scale sophistication.**
+
+RouteBite should deliberately avoid introducing unnecessary complexity such as:
+
+```text
+Microservices
+ML matching
+Advanced fraud models
+Full government KYC
+Production settlement infrastructure
+Complex surge pricing
+City-scale dispatch optimization
+```
+
+until real product validation demonstrates that they are necessary.
+
+The prototype should remain simple enough to build quickly, but structured well enough that production-grade systems can later replace the temporary components without redesigning the entire product.
 
 ## 20. Documentation Rule
 
