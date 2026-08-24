@@ -1,18 +1,18 @@
 # RouteBite — Decision Log
 
-> This document records important product and architecture decisions so that future implementation work does not silently contradict previously agreed assumptions.
+> This document records important product and architecture decisions so implementation does not silently contradict previously agreed assumptions.
 >
-> `PROJECT_CONTEXT.md` explains the product in detail. This file intentionally does **not** repeat every workflow or explanation. It records only decisions, hypotheses, deferred areas, and unresolved decisions.
+> `PROJECT_CONTEXT.md` explains the product in detail. Specialized implementation contracts live in `USER_FLOWS.md`, `PRODUCT_REQUIREMENTS.md`, `PAYMENT_FLOW.md`, `MATCHING_ENGINE.md`, `ARCHITECTURE.md`, `TECH_STACK.md`, and `DATABASE_DESIGN.md`.
 
 ## Status values
 
 - **CONFIRMED** — accepted as current product truth.
 - **CONFIRMED FOR PROTOTYPE** — must be implemented in the working prototype; production implementation may later change.
-- **PROTOTYPE HYPOTHESIS** — initial configurable value/rule chosen so the prototype can work; must be validated with real usage.
-- **PROPOSED** — preferred engineering direction, but detailed design may still change it.
-- **DEFERRED** — intentionally postponed so it does not block the prototype.
+- **PROTOTYPE HYPOTHESIS** — initial configurable rule/value selected so the prototype can work; must be validated.
+- **PROPOSED** — preferred direction but not yet locked.
+- **DEFERRED** — intentionally postponed.
 - **OPEN** — a decision is still required.
-- **SUPERSEDED** — replaced by a later ADR.
+- **SUPERSEDED** — replaced by a later decision.
 
 ---
 
@@ -20,11 +20,7 @@
 
 **Status:** CONFIRMED
 
-**Decision:** RouteBite will initially focus on **food delivery**.
-
-**Reasoning:** The original problem and strongest user story are food-specific. Keeping the first category narrow reduces product, trust, operational, and compliance complexity.
-
-**Future:** The network may later support other hyperlocal items, but that is not current prototype scope.
+**Decision:** RouteBite initially focuses on **food delivery**. Broader hyperlocal delivery is future scope.
 
 ---
 
@@ -32,9 +28,7 @@
 
 **Status:** CONFIRMED
 
-**Decision:** The initial pilot will target a **college campus and nearby high-demand food areas**, not an entire city.
-
-**Reasoning:** RouteBite is a two-sided marketplace. Concentrating demand and supply geographically improves the probability of useful matches and makes the first prototype easier to validate.
+**Decision:** Start with one college campus and nearby high-demand food areas/routes rather than an entire city.
 
 ---
 
@@ -42,9 +36,7 @@
 
 **Status:** CONFIRMED
 
-**Decision:** A street-food vendor or local shop does **not** need to register with RouteBite before a customer can request food from that location.
-
-**Reasoning:** The product's core opportunity is enabling delivery from local/offline places that may not participate in existing delivery marketplaces.
+**Decision:** A street-food/local vendor does not need to register with RouteBite before a customer can request pickup from that location.
 
 ---
 
@@ -52,9 +44,7 @@
 
 **Status:** CONFIRMED
 
-**Decision:** Matching will rely primarily on **pickup coordinates, drop coordinates, partner route, current location, and time**, not vendor name alone.
-
-**Implication:** Vendor/shop name remains descriptive information that helps the delivery partner locate the seller.
+**Decision:** Matching relies primarily on pickup/drop coordinates, route/current location and time. Vendor name is descriptive information.
 
 ---
 
@@ -62,9 +52,7 @@
 
 **Status:** CONFIRMED
 
-**Decision:** If a vendor cannot be found through place search, the customer must still be able to **select/drop a pickup pin manually** and provide landmarks/instructions.
-
-**Reasoning:** Requiring every vendor to exist in RouteBite or a third-party catalogue would recreate the catalogue limitation RouteBite is intended to avoid.
+**Decision:** If place search cannot find a vendor, customer can manually drop/select a pickup pin and provide landmarks/instructions.
 
 ---
 
@@ -72,22 +60,18 @@
 
 **Status:** CONFIRMED
 
-**Decision:** One RouteBite delivery-partner identity supports:
+**Decision:** One partner identity supports:
 
-1. **On My Way** — already travelling A → B and willing to carry compatible orders.
-2. **Available to Deliver** — intentionally online and willing to make dedicated delivery trips.
-
-**Reasoning:** The first mode monetizes existing movement; the second provides fallback supply and supports frequent/professional delivery work.
+1. **On My Way** — existing A → B journey.
+2. **Available to Deliver** — intentionally online for dedicated delivery work.
 
 ---
 
-## ADR-007 — Casual and professional partners share the same network
+## ADR-007 — Casual and regular partners share one network
 
 **Status:** CONFIRMED
 
-**Decision:** RouteBite will support both occasional/casual partners and partners who want to work more regularly in the same supply network.
-
-**Reasoning:** Splitting them into separate networks would reduce liquidity without providing a clear prototype benefit.
+**Decision:** Occasional travellers and more frequent delivery partners participate in the same supply network.
 
 ---
 
@@ -95,11 +79,7 @@
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** The customer will create an order request and **RouteBite will automatically discover/rank compatible partners and dispatch offers**.
-
-The customer will not be required to manually browse and contact multiple travellers.
-
-**Reasoning:** Manual partner hunting creates friction, inconsistent response times, and does not scale into a reliable product workflow.
+**Decision:** Customer creates a request and RouteBite automatically discovers/ranks compatible partners and dispatches offers. Manual partner browsing is not the primary flow.
 
 ---
 
@@ -107,7 +87,7 @@ The customer will not be required to manually browse and contact multiple travel
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** Customer-partner communication can be available after assignment for ambiguous landmarks, substitutions, or pickup instructions, but basic matching must work without a phone conversation.
+**Decision:** Communication may be available after assignment for pickup clarification, but matching must work without a conversation.
 
 ---
 
@@ -115,38 +95,23 @@ The customer will not be required to manually browse and contact multiple travel
 
 **Status:** CONFIRMED
 
-**Decision:** Geographic route compatibility alone is insufficient.
-
-A partner should only be eligible when they can realistically reach pickup X and deliver to Y within the customer's required time window with an acceptable detour.
-
-**Eligibility dimensions include:**
-
-- route compatibility,
-- travel direction,
-- scheduled/actual departure,
-- current location,
-- route progress,
-- pickup reachability,
-- predicted pickup time,
-- predicted delivery time,
-- detour,
-- customer delivery window.
+**Decision:** Geographic compatibility alone is insufficient. Eligibility includes route/direction, time, progress, pickup reachability, ETA, detour and customer delivery window.
 
 ---
 
-## ADR-011 — Partner trip states must distinguish future and immediate availability
+## ADR-011 — Future trip and immediate availability are different states
 
 **Status:** CONFIRMED
 
-**Decision:** A scheduled future trip must not be represented as immediate availability.
+**Decision:** Distinguish:
 
-Core states include:
+```text
+AVAILABLE_NOW
+TRIP_SCHEDULED
+TRIP_ACTIVE
+```
 
-- `AVAILABLE_NOW` — partner is currently available for delivery work.
-- `TRIP_SCHEDULED` — partner has declared a future A → B trip.
-- `TRIP_ACTIVE` — the scheduled/on-my-way trip has started and current location/progress becomes authoritative.
-
-**Reasoning:** A traveller who creates a 6 PM trip at 4 PM must not receive an ASAP 4:15 PM order simply because the route is geographically compatible.
+A future trip must not be treated as immediate supply.
 
 ---
 
@@ -154,34 +119,27 @@ Core states include:
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** The product direction supports:
-
-- **ASAP** delivery,
-- **Schedule for Later** delivery windows.
-
-**Reasoning:** Scheduled delivery allows RouteBite to use travellers who know in advance that they will travel along a useful route later in the day.
+**Decision:** Customer supports **ASAP** and **Schedule for Later** delivery windows.
 
 ---
 
-## ADR-013 — Deterministic matching before machine learning
+## ADR-013 — Deterministic matching before ML
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** The prototype will use transparent deterministic matching rather than ML ranking.
+**Decision:** Use transparent deterministic matching:
 
-Pipeline:
+```text
+Discover → Hard Filter → Rank → Dispatch
+```
 
-`Discover → Hard Eligibility Filter → Rank → Dispatch`
-
-**Reasoning:** We currently have no meaningful historical dataset that would justify ML, and deterministic logic is easier to debug and explain during validation.
+ML matching is deferred until useful real data exists.
 
 ---
 
-## ADR-014 — Initial matching configuration values
+## ADR-014 — Initial matching configuration
 
 **Status:** PROTOTYPE HYPOTHESIS
-
-**Decision:** Start with configurable values approximately equal to:
 
 ```text
 MAX_ASAP_DELIVERY_MINUTES = 45
@@ -192,33 +150,23 @@ OFFER_TIMEOUT_SECONDS = 20
 DEFAULT_DEPARTURE_FLEX_MINUTES = 15
 ```
 
-**Important:** These are not validated business rules. They must remain configurable and should change based on pilot data.
+Values remain configurable.
 
 ---
 
-## ADR-015 — Detour is measured by time and distance
+## ADR-015 — Detour uses time and distance
 
 **Status:** CONFIRMED
 
-**Decision:** On-my-way route compatibility will consider **additional travel time as well as additional distance**.
-
-**Reasoning:** The same 1 km detour can have radically different costs depending on traffic and road conditions.
+**Decision:** On-my-way compatibility evaluates extra time **and** extra distance.
 
 ---
 
-## ADR-016 — Route progress matters after a trip starts
+## ADR-016 — Route progress matters after trip start
 
 **Status:** CONFIRMED
 
-**Decision:** Once a trip becomes active, current route progress must be considered so a partner is not offered pickups they have already substantially passed.
-
-The system should eventually represent data such as:
-
-- route ID,
-- current location,
-- progress along route,
-- trip status,
-- last location update.
+**Decision:** Active-trip matching uses current location/progress and should reject pickups already substantially passed.
 
 ---
 
@@ -226,31 +174,15 @@ The system should eventually represent data such as:
 
 **Status:** PROTOTYPE HYPOTHESIS
 
-**Decision:** Do not broadcast every order to every eligible partner.
-
-Initial strategy:
-
-1. rank eligible candidates,
-2. offer to the top batch (initially 3),
-3. wait approximately 20 seconds,
-4. offer to the next candidates,
-5. broaden constraints and/or incentives only when necessary.
-
-**Reasoning:** This reduces partner notification spam while keeping acceptance latency reasonable.
+**Decision:** Rank candidates, offer approximately the top 3, wait about 20 seconds, then continue to later candidates/fallback.
 
 ---
 
-## ADR-018 — Only one partner can win an order
+## ADR-018 — Exactly one partner can win an order
 
 **Status:** CONFIRMED
 
-**Decision:** Order acceptance must be atomic/transactional so that if multiple partners attempt to accept simultaneously, only one assignment succeeds.
-
-Conceptual transition:
-
-`REQUESTED → ASSIGNED_TO_PARTNER`
-
-All later acceptance attempts must fail cleanly.
+**Decision:** Acceptance must be atomic/transactional. Concurrent accept attempts produce one assignment.
 
 ---
 
@@ -258,13 +190,7 @@ All later acceptance attempts must fail cleanly.
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** RouteBite must explicitly handle the case where nobody accepts an order.
-
-Fallback may progress through:
-
-`strict match → available-now supply → broader acceptable constraints → optional higher incentive → no feasible partner`
-
-The customer should receive a clear failure/retry/schedule-later experience rather than indefinite waiting.
+**Decision:** Matching must terminate with a clear customer outcome if no partner accepts rather than search indefinitely.
 
 ---
 
@@ -272,70 +198,39 @@ The customer should receive a clear failure/retry/schedule-later experience rath
 
 **Status:** PROTOTYPE HYPOTHESIS
 
-**Decision:** Use a simple configurable pricing model for the prototype.
-
 Initial illustrative values:
 
 ```text
-Customer-entered food estimate
-Partner delivery earning = ₹40
-Platform fee = ₹10
+customer-entered food estimate
+partner earning = ₹40
+platform fee = ₹10
 ```
 
-Possible incentive escalation may use values such as `₹40 → ₹50 → ₹60` when an order receives no acceptance.
-
-**Important:** These values are not validated unit economics.
+Possible incentive tiers such as ₹40 → ₹50 → ₹60 remain configurable hypotheses.
 
 ---
 
-## ADR-021 — Test-mode payment for the working prototype
+## ADR-021 — Razorpay Test Mode + internal demo ledger
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** Use **Razorpay Test Mode + an internal demo ledger** for the prototype.
-
-No real money needs to move during the presentation prototype.
-
-Prototype payment lifecycle may include:
-
-- `PAYMENT_PENDING`
-- `TEST_PAYMENT_SUCCESS`
-- `ORDER_ACTIVE`
-- `DELIVERED`
-- `PARTNER_EARNING_RECORDED`
-- `DEMO_SETTLED`
-
-**Reasoning:** This demonstrates a realistic checkout and accounting flow without prematurely building production settlement/compliance infrastructure.
-
-**Production:** Real settlements, payouts, refunds, reconciliation, authorization/capture, and payment compliance are deferred.
+**Decision:** No real marketplace settlement is required for the presentation prototype. Use Razorpay Test Mode for checkout and an internal ledger to demonstrate financial outcomes.
 
 ---
 
-## ADR-022 — Partner should not carry customer payment risk
+## ADR-022 — Partner should not carry permanent customer payment risk
 
-**Status:** CONFIRMED PRODUCT PRINCIPLE
+**Status:** CONFIRMED
 
-**Decision:** Production payment design should avoid forcing the partner to permanently finance the customer's food purchase and hope to be reimbursed later.
-
-**Reasoning:** This creates partner-side fraud/cancellation exposure and makes supply harder to acquire.
-
-The prototype will represent reimbursement through the internal demo ledger rather than real settlement.
+**Decision:** Production design should avoid requiring the partner to permanently finance the customer's food purchase and hope for reimbursement.
 
 ---
 
-## ADR-023 — Price-change approval flow
+## ADR-023 — Price-change approval
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** If actual food price differs from the customer's estimate:
-
-1. partner enters actual bill amount,
-2. partner may upload receipt/proof,
-3. customer sees the difference,
-4. customer approves or contacts the partner,
-5. prototype updates the internal/demo amount.
-
-Production authorization/capture mechanics remain deferred.
+**Decision:** Partner enters actual food price/receipt. Higher price requires customer approval; lower price updates the demo financial outcome.
 
 ---
 
@@ -343,24 +238,15 @@ Production authorization/capture mechanics remain deferred.
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:**
-
-- Before food purchase (`REQUESTED`, `MATCHING`, `ASSIGNED`), customer cancellation can be allowed.
-- After `PICKED_UP`, unrestricted cancellation is not allowed; manual admin/support handling is used.
-- Partner cancellation before pickup should trigger rematching when possible.
-- Partner cancellation after purchase moves to admin intervention.
-
-Production refunds, penalties, and liability policies are deferred.
+**Decision:** Cancellation is relatively simple before purchase. After pickup/purchase, unrestricted customer cancellation is removed and exceptional cases go to admin review. Partner cancellation before purchase attempts rematching.
 
 ---
 
-## ADR-025 — OTP/equivalent delivery verification
+## ADR-025 — Delivery OTP
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** Use an OTP or equivalent handoff confirmation before marking an order successfully delivered.
-
-**Reasoning:** It creates basic evidence of customer-partner handoff and reduces simple non-delivery disputes.
+**Decision:** OTP/equivalent verification is required before successful handoff completion.
 
 ---
 
@@ -368,202 +254,258 @@ Production refunds, penalties, and liability policies are deferred.
 
 **Status:** CONFIRMED FOR CAMPUS PROTOTYPE
 
-**Decision:** Production-grade KYC will not block the prototype.
-
-Initial partner verification will use:
-
-- phone OTP,
-- profile photo,
-- college identity/enrollment information,
-- college ID upload where applicable,
-- manual admin approval.
-
-Possible states:
-
-`PENDING_VERIFICATION → APPROVED`
-
-**Important:** RouteBite must not represent this as government-backed KYC.
-
-**Reasoning:** Collecting full Aadhaar documents is unnecessary for the campus prototype and creates avoidable sensitive-data/security burden.
+**Decision:** Use phone verification, profile photo, college identity/ID where applicable, and manual admin approval. Do not claim government-backed KYC and do not require full Aadhaar collection.
 
 ---
 
-## ADR-027 — Trust is a first-class requirement
+## ADR-027 — Trust is first-class
 
 **Status:** CONFIRMED
 
-**Decision:** Identity, reputation, order history, verification, and abuse controls must be considered from the beginning rather than only after scale.
-
-**Reasoning:** RouteBite places strangers between food, money, and physical delivery. Trust failures can destroy marketplace adoption even when matching works correctly.
+**Decision:** Identity, reputation, history, verification and abuse controls are product requirements from the beginning.
 
 ---
 
-## ADR-028 — Google Maps Platform for the prototype
+## ADR-028 — Google Maps Platform
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** Use Google Maps Platform for prototype mapping/navigation capabilities including:
-
-- interactive map,
-- pickup/drop pins,
-- place search,
-- geocoding,
-- routes,
-- distances,
-- ETA,
-- route matrix where needed.
-
-If a vendor cannot be found through place search, the manual pickup pin remains available.
-
-**Operational rule:** Restrict API keys, configure quotas/billing alerts, and avoid unnecessary route API calls.
+**Decision:** Use Google Maps Platform for map UI, place search, pins, geocoding, routes, distance, ETA and route matrix where needed.
 
 ---
 
-## ADR-029 — Foreground real-time location tracking for the prototype
+## ADR-029 — Foreground location tracking
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** Do not continuously track every partner at high frequency.
-
-- `AVAILABLE_NOW` partners update location periodically for matching.
-- During an active delivery, foreground location can be updated approximately every **10–15 seconds**.
-- Active delivery tracking stops after completion.
-
-Reliable mobile background tracking is deferred until a stronger native/mobile implementation is required.
+**Decision:** Do not continuously track everyone. `AVAILABLE_NOW` partners update periodically; active delivery location updates approximately every 10–15 seconds in foreground; stop after completion.
 
 ---
 
-## ADR-030 — Prototype notifications remain simple
+## ADR-030 — Simple prototype notifications
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** Start with:
-
-- in-app notifications/status updates,
-- phone OTP where required.
-
-Do not block the prototype on WhatsApp, email, SMS status updates, or full push-notification infrastructure.
+**Decision:** Start with in-app realtime/status updates and OTP. WhatsApp/email/full push infrastructure does not block V1.
 
 ---
 
-## ADR-031 — Admin dashboard is required for the prototype
+## ADR-031 — Admin dashboard required
 
 **Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** Build a basic admin/operations experience capable of manually handling early-stage tasks such as:
-
-- pending partner verification,
-- approve/reject partner,
-- active/failed orders,
-- order state review,
-- purchase receipt review,
-- basic dispute/problem handling,
-- manual cancellation/intervention.
-
-**Reasoning:** Early-stage manual operations are acceptable and prevent unnecessary automation from blocking validation.
+**Decision:** Admin can approve/reject partners, inspect orders/receipts, monitor failed states and handle manual prototype intervention.
 
 ---
 
-## ADR-032 — Marketplace liquidity is the primary business risk
+## ADR-032 — Liquidity is the primary marketplace business risk
 
 **Status:** CONFIRMED
 
-**Decision:** Supply-demand liquidity must be treated as a core validation problem.
-
-Pilot metrics should include at least:
-
-- match rate,
-- time to acceptance,
-- completion rate,
-- partner acceptance rate,
-- cancellation rate,
-- repeat customer usage.
+**Decision:** Pilot metrics must track match rate, time to acceptance, completion, partner acceptance, cancellation and repeat usage.
 
 ---
 
-## ADR-033 — Working name is temporary
+## ADR-033 — RouteBite is a temporary working name
 
 **Status:** CONFIRMED
 
-**Decision:** `RouteBite` is a working project name, not yet the final brand.
-
-Branding will not block prototype development.
-
 ---
 
-## ADR-034 — Future “anything from A to B” expansion is not current scope
+## ADR-034 — “Anything from A to B” is not V1 scope
 
 **Status:** CONFIRMED
 
-**Decision:** Broader hyperlocal delivery may be explored later, but non-food categories must not expand prototype requirements unless explicitly reconsidered.
-
 ---
 
-## ADR-035 — Technology must follow requirements
+## ADR-035 — Technology follows product requirements
 
 **Status:** CONFIRMED
 
-**Decision:** Technologies will be selected based on the concrete problem each component must solve.
-
-Examples:
-
-- maps technology must solve geocoding/routing/ETA needs,
-- real-time technology must solve location/order events,
-- database choices must match transactional/geospatial requirements,
-- infrastructure must match prototype deployment needs.
-
-Avoid adding technologies merely because they are popular.
+**Decision:** Add technology only when it solves a concrete requirement.
 
 ---
 
-## ADR-036 — Avoid premature microservices
+## ADR-036 — Modular monolith, not microservices
 
-**Status:** PROPOSED
+**Status:** CONFIRMED FOR PROTOTYPE
 
-**Decision:** Prefer a **modular monolith or similarly simple backend architecture** unless detailed architecture work identifies a concrete reason to distribute services immediately.
-
-**Reasoning:** The prototype values iteration speed, debuggability, low operational overhead, and simple deployment.
-
-**Reconsider when:**
-
-- independent scaling becomes necessary,
-- team/module ownership requires isolation,
-- deployment coupling becomes a measurable problem,
-- reliability requirements justify separate services.
+**Decision:** The first implementation is a modular monolith. Microservices are deferred until there is measured scaling/team/reliability justification.
 
 ---
 
-## ADR-037 — Working prototype over production-scale sophistication
+## ADR-037 — Working prototype before production-scale sophistication
 
 **Status:** CONFIRMED
 
-**Decision:** The first milestone is a coherent **end-to-end working prototype** suitable for idea demonstration and validation.
+**Decision:** The first milestone is a coherent end-to-end prototype. Production settlements, government-grade KYC, ML matching, advanced fraud, city-scale dispatch and similar systems do not block it.
 
-Do not block the prototype on:
+---
 
-- production settlement infrastructure,
-- government-grade KYC,
-- ML matching,
-- advanced fraud models,
-- complex surge pricing,
-- multi-order optimization,
-- city-scale dispatch,
-- large microservice architecture.
+## ADR-038 — One role-aware web application
 
-**Reasoning:** These are real future problems, but solving them before product selection/validation would create complexity without evidence that the product itself works.
+**Status:** CONFIRMED FOR PROTOTYPE
+
+**Decision:** Customer, partner and admin experiences live in one React web application. A normal user can order food and may later gain partner capability after approval.
+
+**Reasoning:** Casual travellers should not require a second RouteBite account/application to become supply.
+
+---
+
+## ADR-039 — MERN+ is the prototype technology direction
+
+**Status:** CONFIRMED FOR PROTOTYPE
+
+**Decision:** The prototype will be built primarily with technologies familiar to a MERN developer:
+
+```text
+MongoDB Atlas
+Express.js
+React
+Node.js
+Mongoose
+```
+
+Specialized external additions are limited to:
+
+```text
+Socket.IO
+Google Maps Platform
+Razorpay Test Mode
+Cloudinary
+```
+
+**Reasoning:** Developer familiarity reduces learning overhead, debugging time and implementation risk. A heavier stack was judged unnecessary for the first prototype.
+
+---
+
+## ADR-040 — Express.js replaces NestJS for the prototype
+
+**Status:** CONFIRMED FOR PROTOTYPE
+
+**Decision:** Use Node.js + Express.js rather than NestJS.
+
+**Structure requirement:** Raw Express must remain layered:
+
+```text
+Route → Middleware → Controller → Service → Mongoose
+```
+
+Business logic belongs in services, not large route/controller handlers.
+
+---
+
+## ADR-041 — MongoDB Atlas + Mongoose replace PostgreSQL + Prisma
+
+**Status:** CONFIRMED FOR PROTOTYPE
+
+**Decision:** MongoDB Atlas is the authoritative durable database and Mongoose is the ODM.
+
+**Correctness requirement:** MongoDB must still enforce critical behavior through:
+
+- atomic conditional updates,
+- unique indexes,
+- transactions for multi-document invariants,
+- explicit status enums,
+- idempotency keys.
+
+The previous PostgreSQL/Prisma-specific design is superseded.
+
+---
+
+## ADR-042 — MongoDB geospatial shortlist + Google Maps final route checks
+
+**Status:** CONFIRMED FOR PROTOTYPE
+
+**Decision:** Use MongoDB `2dsphere`/GeoJSON queries for inexpensive nearby candidate discovery, then Google Maps for road ETA/distance/route compatibility on a small shortlist.
+
+**Reasoning:** MongoDB proximity is cheap but straight-line distance must not become final eligibility.
+
+---
+
+## ADR-043 — Socket.IO for realtime UI communication
+
+**Status:** CONFIRMED FOR PROTOTYPE
+
+**Decision:** Use Socket.IO on the Express HTTP server for partner offers, order status events and live location updates.
+
+**Reliability rule:** MongoDB is authoritative; socket events are notifications only.
+
+---
+
+## ADR-044 — Same-origin single Node deployment
+
+**Status:** CONFIRMED FOR PROTOTYPE
+
+**Decision:** Prefer one production Node/Express deployment that serves:
+
+```text
+React static build
+REST API
+Socket.IO
+lightweight periodic jobs
+```
+
+**Reasoning:** This reduces CORS, cookie, deployment and socket configuration bugs.
+
+---
+
+## ADR-045 — JWT HttpOnly cookie authentication
+
+**Status:** CONFIRMED FOR PROTOTYPE
+
+**Decision:** Use familiar MERN authentication with password hashing via bcrypt and JWT stored in an HttpOnly cookie. Phone OTP verification remains a separate product verification flow.
+
+**Security rule:** Authorization is always checked server-side; frontend route hiding is not security.
+
+---
+
+## ADR-046 — No Redis/message queue dependency initially
+
+**Status:** CONFIRMED FOR PROTOTYPE
+
+**Decision:** Do not add Redis, BullMQ, pg-boss, RabbitMQ or Kafka for V1.
+
+Offer/price/OTP deadlines are persisted in MongoDB. Lightweight periodic jobs may scan expired records.
+
+**Correctness rule:** APIs themselves check `expiresAt`, so correctness does not depend on the periodic job firing exactly on time.
+
+---
+
+## ADR-047 — Cloudinary for prototype file storage
+
+**Status:** CONFIRMED FOR PROTOTYPE
+
+**Decision:** Store profile photos, college verification files and receipts in Cloudinary; MongoDB stores metadata/reference IDs.
+
+**Privacy rule:** Identity documents must use private/authenticated access and must not be exposed as permanent public URLs.
+
+---
+
+## ADR-048 — JavaScript remains the implementation language for V1
+
+**Status:** CONFIRMED FOR PROTOTYPE
+
+**Decision:** Use modern JavaScript for React and Node/Express rather than requiring a TypeScript migration before the prototype.
+
+**Reasoning:** Familiarity is currently more valuable than introducing another language/tooling migration.
+
+**Bug controls:** express-validator, Mongoose schemas, centralized constants/state transitions, ESLint and critical tests compensate for JavaScript's dynamic typing.
+
+TypeScript may be reconsidered later.
 
 ---
 
 # Deferred Production Decisions
 
-The following are intentionally **DEFERRED** and must be revisited before real commercial deployment.
+The following remain intentionally deferred.
 
 ## Payments
 
-- real customer settlement,
-- partner bank payouts,
-- marketplace split settlements,
-- payment authorization/capture,
+- real settlement,
+- bank payouts,
+- split settlement,
+- production authorization/capture,
 - automated refunds,
 - reconciliation,
 - payment compliance.
@@ -571,10 +513,9 @@ The following are intentionally **DEFERRED** and must be revisited before real c
 ## Identity / KYC
 
 - government-backed identity verification,
-- Aadhaar/offline verification strategy if legally/product-appropriate,
-- professional/non-campus partner KYC,
-- external KYC providers,
-- document authenticity verification,
+- professional-partner KYC,
+- Aadhaar/offline verification strategy if appropriate,
+- document authenticity providers,
 - bank-account identity matching.
 
 ## Food safety / liability
@@ -582,55 +523,59 @@ The following are intentionally **DEFERRED** and must be revisited before real c
 - food tampering liability,
 - vendor quality responsibility,
 - packaging standards,
-- delivery damage,
-- food safety policy,
-- customer/partner/platform legal terms.
+- food safety/legal terms.
 
 ## Disputes / fraud
 
 - automated refund decisions,
 - fraud scoring,
-- chargeback handling,
+- chargebacks,
 - evidence arbitration,
-- suspension/penalty algorithms.
+- automated suspension/penalty systems.
 
 ## Advanced pricing
 
-- dynamic surge pricing,
-- supply/demand forecasting,
-- ML pricing,
-- automated subsidy optimization.
+- surge pricing,
+- demand forecasting,
+- automated subsidy optimization,
+- ML pricing.
 
 ## Advanced matching
 
 - ML candidate ranking,
-- multi-order/batch routing,
+- multi-order batching,
 - acceptance prediction,
 - demand forecasting,
 - city-scale optimization.
 
+## Infrastructure scaling
+
+- Redis/job queues,
+- message brokers,
+- microservices,
+- Kubernetes,
+- multiple specialized databases.
+
+These should be introduced only when measured requirements justify them.
+
 ---
 
-# Remaining Open Decisions Before Implementation
+# Remaining Open Decisions Before Coding
 
-These still need dedicated product/architecture work:
+Many earlier open questions have now been resolved by `USER_FLOWS.md`, `ARCHITECTURE.md`, `TECH_STACK.md`, and `DATABASE_DESIGN.md`.
 
-1. Exact frontend experience for consumer vs partner.
-2. One application/interface vs separate consumer and partner applications.
-3. Exact order state machine and allowed state transitions.
-4. Exact partner rating model.
-5. Exact reliability/completion score definition.
-6. Exact admin dashboard fields and permissions.
-7. Initial vendor/pickup waiting-time assumption.
-8. Overall system architecture.
-9. Frontend/backend technology choices.
-10. Database and geospatial technology.
-11. Authentication/session architecture.
-12. Real-time communication technology.
-13. API contracts.
-14. Deployment environment and CI/CD strategy.
-15. Logging/monitoring strategy for the prototype.
-16. Final startup/product name.
+Remaining meaningful decisions include:
+
+1. exact partner reliability score formula,
+2. exact rating aggregation/display rules,
+3. final detailed admin permission matrix,
+4. final vendor wait-time starting value if not already fixed in configuration,
+5. exact REST API contracts and error codes,
+6. exact development OTP implementation/provider boundary,
+7. final deployment provider (Render/Railway/etc.),
+8. final brand/product name.
+
+These do not prevent writing `API_DESIGN.md` and scaffolding the application.
 
 ---
 
@@ -638,8 +583,9 @@ These still need dedicated product/architecture work:
 
 Whenever a major decision changes:
 
-1. Do not silently contradict an existing ADR.
-2. If the old decision is no longer valid, mark it **SUPERSEDED** and reference the replacing ADR.
-3. Update `PROJECT_CONTEXT.md` if the change affects the overall product definition.
-4. Update the relevant specialized document such as `USER_FLOWS.md`, `PAYMENT_FLOW.md`, `MATCHING_ENGINE.md`, `ARCHITECTURE.md`, or `API_DESIGN.md`.
-5. Keep prototype hypotheses configurable so real pilot data can replace assumptions without major rewrites.
+1. do not silently contradict an existing ADR,
+2. mark replaced decisions `SUPERSEDED` when applicable,
+3. update the specialized document,
+4. update project context when the overall project definition materially changes,
+5. keep prototype hypotheses configurable,
+6. prefer the smallest correct implementation that the developer can confidently understand and debug.
