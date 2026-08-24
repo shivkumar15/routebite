@@ -1,2192 +1,1159 @@
 # RouteBite — Technology Stack
 
-> **Status:** Prototype technology specification
+> **Status:** CONFIRMED FOR PROTOTYPE
 >
-> This document locks the technology choices for the first working RouteBite prototype and explains each technology in enough detail that a developer unfamiliar with a tool can understand **what it does, why it is present, where it is used, and what to learn before changing it**.
+> RouteBite will use a deliberately small **MERN+** stack for the first working prototype. The goal is to keep most of the system inside technologies already familiar to a MERN developer and add external technologies only where the product genuinely needs capabilities that MERN does not provide.
 >
-> It must remain consistent with `PROJECT_CONTEXT.md`, `DECISIONS.md`, `USER_FLOWS.md`, `PRODUCT_REQUIREMENTS.md`, `PAYMENT_FLOW.md`, `MATCHING_ENGINE.md`, and `ARCHITECTURE.md`.
+> This document explains what each technology does, why RouteBite needs it, and what should be learned before changing it.
 
 ---
 
-# 1. Technology Goal
+# 1. Technology Principle
 
-The RouteBite prototype should optimize for:
+RouteBite is a prototype marketplace with non-trivial product logic, but it does not need a large enterprise technology stack.
 
-1. **Correctness** — business rules must be difficult to violate accidentally.
-2. **Low bug surface** — avoid unnecessary services, frameworks, and synchronization problems.
-3. **Fast iteration** — one developer should be able to understand and modify the complete system.
-4. **Strong typing** — many mistakes should be caught before the application runs.
-5. **Easy debugging** — when an order fails, we should be able to determine why.
-6. **Portable deployment** — the application should not become trapped inside one hosting vendor.
-7. **Clear path to production** — temporary prototype choices should be replaceable without redesigning the whole product.
+The engineering rule is:
 
-The guiding rule is:
+> **Prefer familiar, mature MERN technology and add a new tool only when it solves a concrete problem that MERN cannot solve cleanly.**
 
-> **Use boring, mature technology for business-critical code and introduce specialized infrastructure only when the product actually needs it.**
+The prototype optimizes for:
+
+1. developer understanding,
+2. low bug surface,
+3. fast debugging,
+4. fast iteration,
+5. one coherent codebase,
+6. correct state transitions and concurrency,
+7. easy local setup,
+8. easy deployment.
+
+The project must not add infrastructure merely because it is fashionable.
 
 ---
 
-# 2. Final Prototype Stack — Summary
+# 2. Final Prototype Stack
 
-| Layer | Technology | Purpose |
+| Layer | Technology | Why |
 |---|---|---|
-| Language | **TypeScript** | Shared strongly typed language across frontend/backend |
-| Runtime | **Node.js (current LTS, pinned)** | Runs backend API and worker |
-| Package manager | **pnpm** | Dependency management + workspace/monorepo support |
-| Frontend | **React + Vite** | Role-aware customer/partner/admin web application |
-| Routing | **React Router** | Client-side page/navigation routing |
-| Server-state client | **TanStack Query** | API fetching, caching, retry and invalidation |
-| Local UI state | **Zustand (only where needed)** | Small temporary client-only state |
-| Forms | **React Hook Form** | Form state and validation integration |
-| Shared validation/contracts | **Zod** | Runtime validation + shared API schemas |
-| Styling | **Tailwind CSS** | Fast consistent UI styling |
-| UI components | **shadcn/ui-style local components** | Accessible reusable UI without a heavy runtime UI framework |
-| Backend framework | **NestJS** | Structured modular-monolith API and application services |
-| HTTP API | **REST/JSON** | Business commands and authoritative reads |
-| Realtime | **Socket.IO through NestJS** | Live order/offer/location UI events |
-| Database | **PostgreSQL** | Authoritative transactional source of truth |
-| ORM / migrations | **Prisma** | Type-safe DB access and schema migrations |
-| Durable background jobs | **pg-boss** | Postgres-backed jobs/timeouts without Redis |
-| Managed DB/Auth/Storage | **Supabase** | Hosted Postgres, authentication, private file storage |
-| Maps | **Google Maps Platform** | Places, pins, routes, distance, ETA, route matrix |
-| Payments | **Razorpay Test Mode** | Prototype checkout/payment flow |
-| File storage | **Supabase Storage private buckets** | Partner documents, profile images, receipts |
-| Logging | **Pino structured logging** | Debuggable backend logs |
-| API documentation | **OpenAPI/Swagger** | Human-readable API contract and testing |
-| Backend unit/integration tests | **Jest + Supertest** | Service and HTTP API testing |
-| Frontend tests | **Vitest + React Testing Library** | Component/business UI tests |
-| End-to-end tests | **Playwright** | Browser-level critical-flow testing |
-| Code quality | **ESLint + Prettier + TypeScript strict mode** | Prevent common mistakes and normalize code style |
-| CI | **GitHub Actions** | Automated checks before merge/deploy |
-| Containers | **Docker** | Repeatable backend/worker runtime |
-| Frontend hosting | **Vercel** | Simple static/web frontend deployment |
-| Backend/worker hosting | **Railway** | Long-running Node API + worker deployment |
-| Monitoring | **Health checks + structured logs; Sentry optional** | Prototype visibility and debugging |
+| Language | **JavaScript (modern ES modules)** | Keeps the project close to standard MERN and minimizes learning overhead |
+| Frontend | **React + Vite** | Familiar component-based web UI and fast development |
+| Frontend routing | **React Router** | Customer, partner, admin and order pages |
+| API calls | **Axios** | Simple REST requests and interceptors |
+| Frontend shared state | **React Context API + local component state** | Avoids adding Redux/Zustand unless a real need appears |
+| Backend runtime | **Node.js LTS** | Runs JavaScript outside the browser |
+| Backend framework | **Express.js** | Simple REST API, middleware and routing |
+| Database | **MongoDB Atlas** | Managed MongoDB database and geospatial support |
+| ODM | **Mongoose** | Schemas, validation, indexes, queries and transactions |
+| Authentication | **JWT in HttpOnly cookies + bcrypt** | Familiar MERN authentication without exposing tokens to browser JavaScript |
+| Request validation | **express-validator** | Reject malformed/untrusted API input before business logic |
+| Realtime | **Socket.IO** | Delivery offers, order updates and live location |
+| Maps/routing | **Google Maps Platform** | Places, maps, routes, ETA, distance and route matrix |
+| Payments | **Razorpay Test Mode** | Realistic prototype checkout without real marketplace settlement |
+| Image/document storage | **Cloudinary private/authenticated assets** | Profile photos, college ID proof and receipts without storing binary files in MongoDB |
+| Upload middleware | **Multer** | Receives multipart uploads before sending them to Cloudinary |
+| Backend testing | **Jest + Supertest** | Tests services and HTTP endpoints |
+| Code quality | **ESLint + Prettier** | Catches common mistakes and keeps style consistent |
+| Deployment | **One Node/Express deployment + MongoDB Atlas** | Minimizes deployment/network/cookie/socket complexity |
+| Source control / CI | **GitHub + lightweight GitHub Actions** | Run tests/lint before merge when useful |
 
-The exact package versions should be selected at project scaffolding time, committed to `package.json` / `pnpm-lock.yaml`, and upgraded intentionally. Do **not** automatically chase every new major version during prototype development.
+Optional tools are not part of the initial dependency set unless implementation proves they are needed.
 
 ---
 
-# 3. Why TypeScript Everywhere
-
-## What TypeScript Is
-
-TypeScript is JavaScript with a compile-time type system.
-
-JavaScript allows this:
-
-```ts
-function completeOrder(order) {
-  return order.customerId.toUpperCase();
-}
-```
-
-If `customerId` is missing or is a number, JavaScript may fail only at runtime.
-
-TypeScript lets us describe the expected structure:
-
-```ts
-type Order = {
-  id: string;
-  customerId: string;
-  status: OrderStatus;
-};
-```
-
-The compiler can then detect many incorrect usages before the application is deployed.
-
-## Why RouteBite Uses TypeScript
-
-RouteBite has many values that must never be confused:
+# 3. System Mental Model
 
 ```text
-order status
-payment status
-partner verification status
-trip status
-partner availability status
-price adjustment status
+                        Browser
+
+                  React + Vite
+                       │
+             REST      │      Socket.IO
+                       │
+                       ▼
+              Node.js + Express.js
+                       │
+            ┌──────────┼───────────┐
+            │          │           │
+            ▼          ▼           ▼
+        Mongoose   Socket.IO   Background scans
+            │                      │
+            └──────────┬───────────┘
+                       ▼
+                  MongoDB Atlas
+
+External providers:
+
+Google Maps Platform
+Razorpay Test Mode
+Cloudinary
+Optional SMS/OTP provider later
 ```
 
-Strong typing reduces bugs such as:
+MongoDB is the durable source of truth.
 
-```text
-comparing payment status to an order status
-forgetting a required order ID
-sending a number where an ISO timestamp is expected
-returning a nullable partner where assignment requires one
-```
-
-Using TypeScript on both frontend and backend also means the developer switches languages less often.
-
-## Important Rule
-
-TypeScript types are **not runtime security**.
-
-An attacker can still send arbitrary JSON to the API.
-
-That is why RouteBite also uses **Zod runtime validation** at system boundaries.
-
-## Learn These TypeScript Topics
-
-Before working deeply in RouteBite, understand:
-
-- primitive and object types,
-- interfaces vs type aliases,
-- unions,
-- discriminated unions,
-- generics,
-- `unknown` vs `any`,
-- optional and nullable values,
-- type narrowing,
-- enums vs string-literal unions,
-- async/Promise typing,
-- strict null checking,
-- utility types such as `Pick`, `Omit`, `Partial`, `Record`.
-
-For this project, discriminated unions are especially useful for state-oriented code.
+Socket.IO is only a fast notification channel. If a socket event is lost, the client must be able to reload the correct order state from REST/MongoDB.
 
 ---
 
-# 4. Node.js — Backend Runtime
+# 4. JavaScript
 
-## What Node.js Is
+## What it is
 
-Node.js is a JavaScript/TypeScript runtime that runs outside the browser.
+JavaScript is the language used by both the browser and Node.js.
 
-Our backend API and background worker execute on Node.js.
+Using JavaScript across the prototype means the developer does not need to switch languages between frontend and backend.
 
-Node is especially suitable for RouteBite because much of the backend work is I/O:
+## Why RouteBite uses it
 
-```text
-HTTP requests
-PostgreSQL queries
-Google Maps requests
-Razorpay callbacks
-WebSocket connections
-file metadata operations
-```
+The developer already understands MERN, so using JavaScript reduces learning time and allows more attention to be spent on RouteBite's difficult parts:
 
-## Version Policy
+- matching,
+- order states,
+- race conditions,
+- maps,
+- payment callbacks,
+- live tracking.
 
-Use the **current Node.js LTS release at project setup time**.
+## Bug-reduction rules
 
-Pin it using a file such as:
+Because JavaScript is dynamically typed, the project must compensate with discipline:
 
-```text
-.nvmrc
-```
+- validate every API request,
+- define state constants centrally,
+- never compare arbitrary status strings scattered throughout code,
+- use Mongoose schema validation,
+- avoid `any`-style unstructured objects,
+- write tests for critical transitions,
+- use ESLint,
+- document important object shapes with JSDoc where useful.
 
-or package metadata.
-
-All developers, CI, API deployment, and worker deployment should use the same major Node version.
-
-Do not develop locally on one Node major version and deploy another without testing.
-
-## Learn These Node.js Topics
-
-- event loop,
-- async/await,
-- promises,
-- process/environment variables,
-- error handling,
-- module system,
-- HTTP request lifecycle,
-- graceful shutdown,
-- signals such as `SIGTERM`,
-- why CPU-heavy synchronous work can block the event loop.
+TypeScript remains a possible future migration, but it is not required to prove the prototype.
 
 ---
 
-# 5. pnpm — Package Management and Monorepo
+# 5. React
 
-## What pnpm Does
+React is the frontend library.
 
-`pnpm` installs JavaScript dependencies and manages multiple related applications/packages in one repository.
+RouteBite will use **one role-aware React application** rather than separate customer and partner applications.
 
-RouteBite should use a small monorepo so frontend and backend can share API contracts without duplicating them.
-
-Recommended structure:
+The same account may:
 
 ```text
-routebite/
-├── apps/
-│   ├── web/              # React application
-│   └── server/           # NestJS codebase
-│       ├── src/main.ts   # HTTP/WebSocket API entry point
-│       └── src/worker.ts # background worker entry point
-│
-├── packages/
-│   ├── contracts/        # Zod API schemas and shared DTO types
-│   └── config/           # safe shared constants/types if useful
-│
-├── prisma/
-│   ├── schema.prisma
-│   └── migrations/
-│
-├── docs/
-├── package.json
-├── pnpm-workspace.yaml
-└── pnpm-lock.yaml
+Order food
+      │
+      └── Apply to become a partner
+                │
+                └── Use partner features after approval
 ```
 
-## Why Not Add Turborepo Initially
-
-Turborepo is useful for large monorepos and build caching, but RouteBite currently has only a few packages.
-
-`pnpm` workspaces are enough.
-
-Adding another orchestration layer before it solves a real problem increases setup/debugging work.
-
-## Learn
-
-- `package.json`,
-- dependencies vs devDependencies,
-- lockfiles,
-- workspace packages,
-- scripts,
-- semantic version ranges,
-- why lockfiles must be committed.
-
----
-
-# 6. React — Frontend UI
-
-## What React Does
-
-React builds the web interface as reusable components.
-
-RouteBite uses **one role-aware React application** for:
+Possible areas:
 
 ```text
-customer screens
-partner screens
-admin screens
+Home / Create Order
+My Orders
+Partner Dashboard
+Scheduled Trips
+Active Delivery
+Profile
+Admin
 ```
 
-We are not building separate native apps in the first prototype.
+## Important frontend rule
 
-## Why React
+React never owns authoritative business state.
 
-React fits RouteBite because the UI is heavily state-driven:
+For example, this is unsafe:
 
 ```text
-MATCHING
-ASSIGNED
-PARTNER_TO_PICKUP
-PRICE_CONFIRMATION_REQUIRED
-OUT_FOR_DELIVERY
-COMPLETED
+Partner clicks Accept
+Frontend immediately assumes order is assigned
 ```
 
-Each backend state can map to explicit UI behavior.
-
-React also has strong ecosystem support for maps, forms, data fetching, and testing.
-
-## Critical Architecture Rule
-
-**React does not own business truth.**
-
-The database/backend owns whether an order is assigned, paid, cancelled, or completed.
-
-Frontend state is only a view of backend state.
-
-For example, never do:
-
-```ts
-setOrderStatus("COMPLETED");
-```
-
-and assume the order is actually complete.
-
-Instead:
+Correct flow:
 
 ```text
-frontend sends command
-      ↓
-backend validates transition
-      ↓
-database transaction commits
-      ↓
-frontend receives updated state
+Partner clicks Accept
+        ↓
+Express API validates
+        ↓
+MongoDB atomic/transactional update succeeds
+        ↓
+API returns assigned order
+        ↓
+Socket.IO informs customer/other partner clients
 ```
 
-## Learn
+The database response wins over local React state.
+
+## Learn/review
 
 - components,
 - props,
 - state,
 - hooks,
 - `useEffect`,
-- controlled forms,
+- Context API,
+- forms,
 - conditional rendering,
-- context,
-- component composition,
-- error boundaries,
-- render lifecycle.
-
-Avoid placing all application logic inside `useEffect` chains. That often creates hard-to-debug frontend races.
+- cleanup functions,
+- avoiding stale closures,
+- route-based rendering.
 
 ---
 
-# 7. Vite — Frontend Build Tool
+# 6. Vite
 
-## What Vite Does
+Vite runs the React development environment and creates the production frontend build.
 
-Vite provides the local development server and production build system for the React app.
-
-It handles:
+During local development:
 
 ```text
-TypeScript compilation pipeline
-fast hot reload
-frontend environment variables
-production asset bundling
+React/Vite: http://localhost:5173
+Express:    http://localhost:5000
 ```
 
-## Why Vite Instead of a Full-Stack React Framework
+Vite should proxy `/api` and `/socket.io` to Express where practical so local development behaves similarly to production.
 
-RouteBite already has a dedicated NestJS backend.
-
-We do not need Next.js server actions, server components, or another backend runtime in the frontend project.
-
-Using React + Vite keeps the responsibility clear:
+For production, the simplest deployment is:
 
 ```text
-Vite/React = browser UI
-NestJS     = business backend
+npm run build
+      ↓
+React static files created
+      ↓
+Express serves those files
 ```
 
-That separation reduces accidental duplication of backend logic.
+This gives RouteBite one application origin in production and reduces:
+
+- CORS bugs,
+- cookie bugs,
+- Socket.IO cross-origin bugs,
+- deployment coordination.
 
 ---
 
-# 8. React Router — Navigation
+# 7. React Router
 
-React Router manages client-side routes such as:
+React Router provides pages such as:
 
 ```text
 /login
 /order/new
 /orders/:orderId
 /partner
-/partner/trips/:tripId
-/admin/orders
+/partner/trips
+/partner/deliveries/:orderId
+/admin
+/admin/orders/:orderId
 ```
 
-Route guards in the UI improve user experience, but **real authorization must always be checked by the backend**.
+Frontend route protection is for user experience only.
 
-Example:
-
-```text
-UI hides Admin page            → convenience
-Backend rejects non-admin API  → security
-```
-
-Never rely on frontend route hiding for security.
+Security must be enforced again in Express middleware.
 
 ---
 
-# 9. TanStack Query — Server State
+# 8. Axios
 
-## What Problem It Solves
-
-A frontend repeatedly needs backend data:
-
-```text
-current user
-order details
-partner status
-trip status
-admin queue
-```
-
-Naively storing all of this manually in global state causes bugs involving stale data, duplicate loading flags, and inconsistent retries.
-
-TanStack Query manages **server state**:
-
-- fetching,
-- caching,
-- refetching,
-- invalidation,
-- retries,
-- loading/error states.
-
-## RouteBite Rule
-
-Use TanStack Query for data whose source of truth is the backend.
+Axios sends HTTP requests from React to Express.
 
 Examples:
 
 ```text
-GET /me
-GET /orders/:id
-GET /partner/profile
-GET /admin/orders
+POST /api/orders
+POST /api/orders/:id/payment
+POST /api/offers/:id/accept
+GET  /api/orders/:id
 ```
 
-When Socket.IO says:
+Use one shared Axios instance.
 
-```text
-ORDER_UPDATED
-```
+It should configure:
 
-the client can update/invalidate the relevant query and, when needed, refetch authoritative state.
+- base URL,
+- `withCredentials: true` when using HttpOnly auth cookies,
+- standard error handling,
+- request IDs if later useful.
 
-## Learn
-
-- query keys,
-- `useQuery`,
-- `useMutation`,
-- invalidation,
-- stale time,
-- retry behavior,
-- optimistic updates.
-
-For critical RouteBite state transitions, avoid risky optimistic updates. Wait for backend confirmation.
+Do not create different Axios configuration in every component.
 
 ---
 
-# 10. Zustand — Small Client-Only State
+# 9. React Context API
 
-Zustand is a small state-management library.
+The prototype does not require Redux or Zustand initially.
 
-Use it only for state that is genuinely local to the browser, for example:
+Context can hold small global UI information such as:
 
 ```text
-temporary order-draft UI state
-map panel visibility
-local filter settings
-short-lived wizard progress
+current logged-in user
+authentication loading state
+current partner capability
 ```
 
-Do **not** store authoritative order/payment/partner state only in Zustand.
+Do not put the complete database copy into Context.
 
-If data comes from the backend, prefer TanStack Query.
+Order pages should fetch authoritative order state from the backend.
 
-If Zustand is not needed during the first implementation, do not add it merely because it is listed here.
+If frontend state becomes genuinely difficult later, a dedicated state library can be introduced with evidence that it solves a real problem.
 
 ---
 
-# 11. React Hook Form — Forms
+# 10. Node.js
 
-RouteBite contains many forms:
+Node.js runs the Express backend.
 
-```text
-registration
-partner application
-create food request
-scheduled trip
-actual bill entry
-price approval
-admin actions
-```
+Most RouteBite backend work is I/O-heavy:
 
-React Hook Form manages form values and errors efficiently without excessive re-rendering.
+- MongoDB queries,
+- Google Maps requests,
+- Razorpay callbacks,
+- Cloudinary uploads,
+- Socket.IO connections.
 
-It integrates well with Zod.
+That is a good fit for Node.js.
 
-Example conceptual flow:
+Use an LTS Node release and pin the major version in the repository.
 
-```text
-User inputs form
-      ↓
-React Hook Form holds field state
-      ↓
-Zod validates shape/rules
-      ↓
-valid request sent to backend
-      ↓
-backend validates again
-```
+Important topics:
 
-The backend validation is mandatory even if frontend validation succeeds.
+- event loop,
+- promises,
+- async/await,
+- error propagation,
+- environment variables,
+- graceful process shutdown,
+- why blocking synchronous work should be avoided.
 
 ---
 
-# 12. Zod — Validation and Shared API Contracts
+# 11. Express.js
 
-## What Zod Is
+Express is the backend HTTP framework.
 
-Zod validates data at runtime and can infer TypeScript types from the validation schema.
-
-Example:
-
-```ts
-const CreateOrderSchema = z.object({
-  vendorDisplayName: z.string().min(1),
-  estimatedFoodCostPaise: z.number().int().nonnegative(),
-  pickupLatitude: z.number(),
-  pickupLongitude: z.number(),
-});
-```
-
-An attacker sending malformed JSON cannot bypass this merely because TypeScript compiled successfully.
-
-## Why Shared Contracts Matter
-
-Without shared contracts:
+It provides:
 
 ```text
-Frontend thinks field is: deliveryTime
-Backend expects: requestedDeliveryAt
+routes
+middleware
+request/response objects
+error middleware
+HTTP server integration
 ```
 
-This creates runtime bugs.
+## Required project structure
 
-Put API request/response schemas in:
+RouteBite must not become a large file of routes directly calling MongoDB.
+
+Use this structure:
 
 ```text
-packages/contracts
+server/
+└── src/
+    ├── config/
+    ├── constants/
+    ├── controllers/
+    ├── middleware/
+    ├── models/
+    ├── routes/
+    ├── services/
+    ├── sockets/
+    ├── jobs/
+    ├── utils/
+    └── app.js
 ```
 
-Both web and server import those contracts.
-
-## What NOT to Share
-
-Do not expose Prisma/database models directly to the frontend.
-
-Database schemas contain internal fields that should not become public API contracts.
-
-Use explicit API schemas.
-
-## Learn
-
-- object schemas,
-- unions,
-- discriminated unions,
-- transforms,
-- refinements,
-- optional/nullable values,
-- schema parsing,
-- inferred TypeScript types.
-
----
-
-# 13. Tailwind CSS — Styling
-
-Tailwind CSS provides utility classes for building the UI quickly and consistently.
-
-Example concept:
+Responsibility:
 
 ```text
-spacing
-layout
-responsive design
-typography
-borders
-states
+Route
+  ↓
+Middleware
+  ↓
+Controller
+  ↓
+Service
+  ↓
+Mongoose Model / Transaction
+  ↓
+MongoDB
 ```
 
-The prototype should favor simple, understandable screens over highly customized animation/design systems.
+### Route
 
-The goal is to demonstrate the marketplace workflow, not build a design framework.
+Defines HTTP method/path.
 
----
+### Controller
 
-# 14. shadcn/ui-Style Components
-
-The project may use shadcn/ui-style components for common controls such as:
-
-```text
-button
-dialog
-form control
-card
-tabs
-table
-dropdown
-toast
-```
-
-The useful property is that the component source lives in our codebase rather than hiding behavior inside a large opaque UI package.
-
-Use accessible primitives and keep customization modest.
-
-Do not add several overlapping UI frameworks such as Material UI + Ant Design + shadcn simultaneously.
-
----
-
-# 15. NestJS — Backend Framework
-
-## What NestJS Is
-
-NestJS is a structured Node.js backend framework.
-
-It provides conventions for:
-
-```text
-modules
-controllers
-services
-dependency injection
-guards
-interceptors
-WebSocket gateways
-configuration
-testing
-```
-
-## Why NestJS Instead of a Bare Express App
-
-A tiny Express app is easy to start but can become unstructured quickly:
-
-```text
-routes calling database directly
-business logic duplicated across handlers
-authorization checks forgotten
-status transitions spread across files
-```
-
-RouteBite has enough domain complexity that structure is valuable.
-
-NestJS lets us create modules such as:
-
-```text
-AuthModule
-UsersModule
-PartnersModule
-OrdersModule
-TripsModule
-MatchingModule
-OffersModule
-PaymentsModule
-TrackingModule
-NotificationsModule
-AdminModule
-FilesModule
-MapsModule
-```
-
-This is still **one modular monolith**, not microservices.
-
-## Recommended Internal Layering
-
-Inside a module, prefer:
-
-```text
-Controller / Gateway
-      ↓
-Application Service
-      ↓
-Domain rules / state machine
-      ↓
-Repository / Prisma
-      ↓
-PostgreSQL
-```
+Reads validated HTTP input and sends HTTP response.
 
 Controllers should remain thin.
 
-Example:
+### Service
+
+Contains business rules.
+
+Examples:
 
 ```text
-BAD:
-OrderController contains 200 lines of payment + matching logic.
-
-GOOD:
-OrderController validates request and calls OrderService.
-OrderService coordinates domain operations.
+assignPartner()
+approvePriceChange()
+markPickedUp()
+verifyDeliveryOtp()
+cancelOrder()
 ```
 
-## Learn
+### Model
 
-- modules,
-- controllers,
-- providers/services,
-- dependency injection,
-- guards,
-- interceptors,
-- exception filters,
-- pipes,
-- lifecycle hooks,
-- WebSocket gateways,
-- testing modules.
+Defines persistent document structure, indexes and database validation.
+
+This structure gives a raw Express project much of the discipline we wanted from a heavier framework without making the developer learn NestJS.
 
 ---
 
-# 16. REST API — Authoritative Commands and Reads
+# 12. MongoDB Atlas
 
-RouteBite uses REST/JSON for business operations such as:
+MongoDB is the primary database.
+
+MongoDB Atlas is the managed cloud version used for the prototype.
+
+## Why MongoDB is acceptable for RouteBite
+
+RouteBite needs:
+
+- user/order documents,
+- partner operational state,
+- scheduled trips,
+- geospatial nearby-partner queries,
+- atomic updates,
+- multi-document transactions for critical workflows.
+
+MongoDB supports all of these.
+
+## Source-of-truth rule
+
+If losing information after a Node process restart would make the order incorrect, persist it in MongoDB.
+
+Examples:
 
 ```text
-POST /orders
-POST /orders/:id/payments
-POST /offers/:id/accept
-POST /orders/:id/pickup
-POST /orders/:id/verify-delivery
-POST /partner/trips
-GET  /orders/:id
-GET  /partner/offers
+order status
+assigned partner
+payment status
+offer expiry timestamp
+price approval deadline
+delivery OTP hash
+partner active order
 ```
 
-REST is used because commands need explicit authentication, validation, predictable responses, idempotency behavior, and error handling.
-
-## Important Rule
-
-Critical state changes happen through backend commands, not WebSocket messages from the UI.
-
-Socket.IO is used to **notify**, not to become the only path for durable business mutations.
+Do not rely only on JavaScript memory for these values.
 
 ---
 
-# 17. Socket.IO — Realtime User Experience
+# 13. Mongoose
 
-## Why Realtime Is Needed
+Mongoose maps JavaScript objects to MongoDB documents.
 
-RouteBite needs near-real-time UI updates for:
+It provides:
 
-```text
-new partner offer
-partner accepted
-price approval request
-order status change
-partner location update
-matching failure
+- schemas,
+- validation,
+- indexes,
+- timestamps,
+- query helpers,
+- transactions/sessions,
+- middleware where appropriate.
+
+Example conceptual schema:
+
+```js
+const orderSchema = new mongoose.Schema({
+  customerId: { type: ObjectId, required: true },
+  status: { type: String, enum: ORDER_STATUSES, required: true },
+  assignedPartnerId: { type: ObjectId, default: null },
+  estimatedFoodCostPaise: { type: Number, required: true, min: 0 },
+});
 ```
 
-Socket.IO provides persistent realtime communication over WebSocket with fallback/reconnection behavior.
+## Critical rule
 
-NestJS has first-class Socket.IO gateway support.
+Mongoose validation alone does not prevent concurrency bugs.
 
-## Suggested Rooms
+Critical actions must use:
 
-```text
-user:{userId}
-order:{orderId}
-partner:{partnerId}
-admin
-```
-
-## Critical Reliability Rule
-
-> **Socket events are hints, not the database.**
-
-Correct pattern:
-
-```text
-backend transaction commits
-        ↓
-backend emits socket event
-        ↓
-client updates/refetches UI
-```
-
-Incorrect pattern:
-
-```text
-socket event emitted
-        ↓
-UI assumes success
-        ↓
-database write fails
-```
-
-After reconnect, clients must be able to refetch current state over REST.
-
-## Learn
-
-- connection lifecycle,
-- rooms,
-- authentication during connection,
-- reconnects,
-- acknowledgements,
-- stale connections,
-- ordering limitations,
-- why WebSockets should not be the sole source of truth.
+- conditional atomic updates,
+- unique indexes,
+- MongoDB transactions when multiple documents must change together.
 
 ---
 
-# 18. PostgreSQL — Authoritative Database
+# 14. MongoDB Geospatial Queries
 
-## What PostgreSQL Is
+For partner current location use GeoJSON:
 
-PostgreSQL is a relational database with strong transaction support, constraints, indexes, and mature operational tooling.
-
-It stores durable RouteBite truth:
-
-```text
-users
-partner profiles
-orders
-trips
-offers
-assignments
-payments
-ledger records
-ratings
-admin actions
-state-change timestamps
+```js
+currentLocation: {
+  type: "Point",
+  coordinates: [longitude, latitude]
+}
 ```
 
-## Why Relational Data Fits RouteBite
+Create a `2dsphere` index.
 
-RouteBite contains strong relationships:
+MongoDB can then perform cheap coarse candidate discovery such as:
+
+> Find `AVAILABLE_NOW` approved partners near the pickup.
+
+This is **not** the final matching decision.
+
+Pipeline:
 
 ```text
-Order belongs to Customer
-Order may have one assigned Partner
-Offer belongs to Order + Partner
-Trip belongs to Partner
-Payment belongs to Order
-Ledger entry belongs to Order
+MongoDB geospatial shortlist
+        ↓
+Google Maps road ETA/routes
+        ↓
+RouteBite hard filters
+        ↓
+ranking
+        ↓
+offer dispatch
 ```
 
-It also has consistency rules where transactions matter.
+Straight-line geographic distance must never replace real route/ETA checks for final eligibility.
+
+---
+
+# 15. Authentication — JWT + HttpOnly Cookie
+
+The prototype will use familiar MERN authentication.
+
+Flow:
+
+```text
+User logs in
+    ↓
+Express validates credentials
+    ↓
+Server signs JWT
+    ↓
+JWT placed in HttpOnly cookie
+    ↓
+Browser automatically sends cookie to RouteBite
+```
+
+Why HttpOnly:
+
+Browser JavaScript cannot directly read the token, reducing exposure to simple token-stealing XSS attacks.
+
+Recommended cookie settings in production:
+
+```text
+httpOnly: true
+secure: true
+sameSite: "lax"  // when app is served from the same origin
+```
+
+The backend should serve the React build from the same production origin, which keeps this much simpler.
+
+JWT payload should stay small, for example:
+
+```text
+userId
+role/capability hints
+tokenVersion
+```
+
+The backend must still load/check current authorization for sensitive actions.
+
+---
+
+# 16. bcrypt
+
+Passwords must never be stored as plain text.
+
+`bcrypt` hashes passwords before storage.
+
+Flow:
+
+```text
+password
+   ↓
+bcrypt hash
+   ↓
+MongoDB stores only hash
+```
+
+Never log passwords or password hashes.
+
+Phone OTP verification remains a separate concept from password authentication.
+
+---
+
+# 17. Phone OTP
+
+The product flow requires phone verification.
+
+For local/demo development, do not block the entire prototype on an SMS vendor.
+
+Use an OTP abstraction:
+
+```text
+OtpService.send(phone, code)
+```
+
+Prototype implementations:
+
+```text
+DevelopmentOtpProvider
+Later: MSG91 / Twilio / another provider
+```
+
+OTP rules:
+
+- generate using cryptographically secure randomness,
+- store only a hash,
+- set expiry,
+- limit attempts,
+- invalidate after successful use,
+- never expose a production OTP in logs.
+
+Development mode may show/log the code explicitly and must be clearly labelled as development-only.
+
+---
+
+# 18. express-validator
+
+Every incoming API payload is untrusted.
+
+`express-validator` handles request validation such as:
+
+```text
+required fields
+string length
+number ranges
+MongoDB IDs
+coordinates
+future timestamps
+```
 
 Example:
 
-Two partners click `Accept` simultaneously.
+```text
+Client validation → convenience
+Express validation → security/business boundary
+Mongoose validation → database safety
+```
 
-The database must ensure exactly one assignment wins.
+Use all relevant layers rather than trusting only the frontend.
 
-PostgreSQL transactions/constraints are a natural solution.
+---
 
-## Why MongoDB Is Not the Default Here
+# 19. Socket.IO
 
-MongoDB is a good database for many products, but RouteBite's hardest problems are transactional relationships and concurrency, not flexible document shape.
+Socket.IO provides realtime communication between browser and Express.
 
-Using PostgreSQL reduces the number of business consistency rules we would otherwise have to enforce manually.
+RouteBite uses it for:
 
-## Money Rule
+### Partner events
 
-Store INR money as integer **paise**, never JavaScript floating point.
+```text
+NEW_DELIVERY_OFFER
+OFFER_EXPIRED
+ORDER_CANCELLED
+PRICE_APPROVED
+```
+
+### Customer events
+
+```text
+PARTNER_ASSIGNED
+ORDER_STATUS_UPDATED
+PARTNER_LOCATION_UPDATED
+PRICE_CONFIRMATION_REQUIRED
+```
+
+## Reliability rule
+
+Socket.IO never becomes the source of truth.
+
+Correct order:
+
+```text
+1. validate action
+2. persist MongoDB change
+3. commit transaction
+4. emit Socket.IO event
+```
+
+If step 4 fails, REST still returns the correct persisted state when the client refetches.
+
+---
+
+# 20. Foreground Live Location
+
+Browser geolocation provides partner coordinates during an active delivery.
+
+The partner client may send approximately every 10–15 seconds.
+
+Backend validates:
+
+- authenticated partner,
+- active assigned order,
+- coordinate shape,
+- reasonable update frequency.
+
+The newest operational location can live on the partner/order document.
+
+The prototype does not need to permanently save every GPS point.
+
+---
+
+# 21. Background Expiry Handling Without Redis/Queues
+
+The prototype does not need Redis, BullMQ, RabbitMQ, Kafka or pg-boss.
+
+Important deadlines are stored in MongoDB:
+
+```text
+offer.expiresAt
+priceConfirmation.expiresAt
+otp.expiresAt
+```
+
+A small periodic job inside the Node server can scan for expired records and move them forward.
 
 Example:
 
 ```text
-₹250.00 = 25000 paise
+Every few seconds:
+find pending offers where expiresAt <= now
+mark expired atomically
+continue matching round where required
+```
+
+## Critical safety rule
+
+Correctness must not depend only on the timer running.
+
+When accepting an offer, MongoDB query must also require:
+
+```text
+status = PENDING
+expiresAt > now
+```
+
+Therefore an expired offer cannot be accepted even if the background scan is temporarily delayed.
+
+This makes the simple worker recoverable after server restart.
+
+---
+
+# 22. Google Maps Platform
+
+MERN does not provide road routing/navigation data.
+
+Google Maps provides:
+
+- interactive maps,
+- Places search,
+- geocoding,
+- manual pins,
+- routes,
+- ETA,
+- distance,
+- route matrix.
+
+RouteBite should not call route APIs for every database record.
+
+Use:
+
+```text
+MongoDB coarse shortlist
+       ↓
+Google Maps for small candidate set
+```
+
+API keys must be restricted by environment/application and billing quotas should be configured.
+
+---
+
+# 23. Razorpay Test Mode
+
+Razorpay is used only for prototype checkout.
+
+The authoritative payment confirmation must happen on the backend.
+
+Never trust only a frontend message saying `Payment successful`.
+
+Backend responsibilities include:
+
+- create test payment/order,
+- verify returned payment signature where applicable,
+- process webhooks idempotently,
+- persist payment state,
+- start matching only after valid payment confirmation.
+
+Production payouts/settlement remain outside prototype scope.
+
+---
+
+# 24. Cloudinary + Multer
+
+MongoDB should store metadata and references, not large image files.
+
+Use Cloudinary for:
+
+```text
+profile photo
+college ID proof
+purchase receipt
+```
+
+Use Multer to receive the upload temporarily and send it to Cloudinary.
+
+## Privacy rule
+
+Sensitive identity documents must use private/authenticated delivery, not public URLs.
+
+MongoDB stores data such as:
+
+```text
+cloudinaryPublicId
+resourceType
+uploadedAt
+ownerUserId
+purpose
+```
+
+Generate access only for authorized users/admin flows.
+
+Do not save secrets or signed delivery URLs permanently.
+
+---
+
+# 25. Money Representation
+
+Use integer **paise**, not floating-point rupees.
+
+Good:
+
+```js
+estimatedFoodCostPaise = 20000;
+platformFeePaise = 1000;
 ```
 
 Avoid:
 
 ```js
-0.1 + 0.2
+price = 200.10;
 ```
 
-style floating-point accounting errors.
+JavaScript integer numbers are exact for RouteBite's expected small monetary values as long as values remain well below `Number.MAX_SAFE_INTEGER`.
 
-## Time Rule
-
-Store backend timestamps in UTC.
-
-Convert to the user's timezone only for display.
-
-## Learn
-
-- tables,
-- primary keys,
-- foreign keys,
-- unique constraints,
-- indexes,
-- transactions,
-- isolation/concurrency basics,
-- `SELECT ... FOR UPDATE`,
-- conditional updates,
-- timestamps,
-- query plans,
-- migrations.
+All money validation should require non-negative safe integers where appropriate.
 
 ---
 
-# 19. Geospatial Strategy — Keep V1 Simple
+# 26. Time Representation
 
-We are **not requiring PostGIS for the first campus prototype**.
+MongoDB/Mongoose `Date` values should represent UTC timestamps.
 
-Store coordinates explicitly:
+Backend stores exact timestamps such as:
 
 ```text
-latitude
-longitude
+createdAt
+expiresAt
+scheduledDepartureAt
+deliveryWindowStart
+deliveryWindowEnd
 ```
 
-Candidate discovery can use:
+The frontend converts them to the user's local time for display.
 
-1. simple coarse bounding/radius filtering,
-2. a Haversine-distance helper where needed,
-3. Google Routes/Route Matrix for the small shortlist.
+Do not store ambiguous strings such as:
 
-This avoids introducing advanced geospatial SQL before the prototype needs it.
+```text
+"6 PM"
+```
 
-If real usage later requires efficient city-scale spatial queries, we can introduce **PostGIS** deliberately.
-
-This is an example of postponing complexity without blocking future architecture.
+as the authoritative time value.
 
 ---
 
-# 20. Prisma — ORM and Migrations
+# 27. Environment Variables
 
-## What an ORM Does
-
-An ORM maps application code to relational database operations.
-
-Instead of manually writing SQL for every common operation, Prisma provides a typed client.
-
-Conceptually:
-
-```ts
-await prisma.order.findUnique({
-  where: { id: orderId }
-});
-```
-
-## Why Prisma
-
-For the prototype it gives us:
-
-- generated TypeScript types,
-- readable data access,
-- migrations,
-- relational modeling,
-- transaction API,
-- strong developer tooling.
-
-## Important Rule
-
-Prisma does not eliminate SQL knowledge.
-
-For concurrency-sensitive operations, indexes, performance, or special database features, raw SQL may still be appropriate.
-
-Example cases where we must think carefully:
-
-```text
-atomic partner assignment
-conditional state transition
-unique ledger entry
-job locking
-```
-
-Never assume that an ORM automatically prevents races.
-
-## Learn
-
-- Prisma schema,
-- models,
-- relations,
-- migrations,
-- generated client,
-- transactions,
-- unique constraints,
-- raw queries,
-- connection management.
-
----
-
-# 21. Supabase — Managed Platform Boundary
-
-For the prototype, Supabase is used as a managed infrastructure provider for:
-
-```text
-PostgreSQL
-Authentication
-Private object storage
-```
-
-We are **not** moving core business logic into Supabase client-side functions.
-
-The NestJS backend remains the business authority.
-
-Conceptually:
-
-```text
-Browser
-  ↓ auth/login
-Supabase Auth
-
-Browser
-  ↓ authenticated business request
-NestJS API
-  ↓
-PostgreSQL
-```
-
-## Why This Choice
-
-It reduces the number of infrastructure systems we need to administer while keeping PostgreSQL as a standard portable database.
-
-If RouteBite later moves to another Postgres or storage provider, the domain code should require limited change because provider-specific code is isolated behind adapters.
-
----
-
-# 22. Authentication — Supabase Auth
-
-## What Authentication Means
-
-Authentication answers:
-
-> **Who is this user?**
-
-Authorization answers:
-
-> **What is this authenticated user allowed to do?**
-
-These are different problems.
-
-Supabase Auth handles account identity/session mechanics.
-
-NestJS handles RouteBite authorization rules.
-
-Example:
-
-```text
-Supabase token proves user identity
-        ↓
-NestJS maps auth identity → RouteBite user
-        ↓
-NestJS verifies partner/admin permissions
-```
-
-## Phone Verification
-
-The product flow is phone-verification based.
-
-For environments where a real SMS provider is not configured, development/testing may use a **clearly labelled non-production OTP path**. That path must be impossible to enable accidentally in production.
-
-Do not hardcode a universal OTP such as `123456` in production code paths.
-
-## Authorization Must Be Backend-Enforced
+Secrets and environment-specific configuration belong in environment variables.
 
 Examples:
 
 ```text
-approved partner → may set AVAILABLE_NOW
-pending partner  → forbidden
-
-admin → may approve partner
-normal user → forbidden
-
-assigned partner → may update that order pickup state
-another partner  → forbidden
+MONGODB_URI
+JWT_SECRET
+RAZORPAY_KEY_ID
+RAZORPAY_KEY_SECRET
+GOOGLE_MAPS_API_KEY
+CLOUDINARY_CLOUD_NAME
+CLOUDINARY_API_KEY
+CLOUDINARY_API_SECRET
 ```
 
-## Learn
+Commit a safe `.env.example` containing names only.
 
-- JWT/session concept,
-- token verification,
-- authentication vs authorization,
-- role/capability checks,
-- token expiry,
-- refresh sessions,
-- secure browser storage/session handling.
+Never commit real `.env` secrets.
 
 ---
 
-# 23. Supabase Storage — Private File Storage
+# 28. Security Middleware
 
-RouteBite needs files for:
+Use a few small Express middleware packages where they solve concrete problems:
 
-```text
-profile images
-college ID / verification documents
-purchase receipts
-```
+- `helmet` for common HTTP security headers,
+- `cors` during local development when Vite and Express use different origins,
+- `express-rate-limit` for login/OTP/high-risk endpoints.
 
-These should **not** be stored as binary blobs directly inside the main PostgreSQL tables.
+These are support libraries, not architectural subsystems.
 
-Store only file metadata/reference in the database.
-
-Use private buckets for sensitive files.
-
-Access should use short-lived signed URLs or backend-mediated access.
-
-Example:
-
-```text
-Database:
-receiptObjectKey = receipts/order-123/receipt.jpg
-
-Storage:
-actual image bytes
-```
-
-## Security Rules
-
-- verification documents are admin-only,
-- receipt access is restricted to relevant user/partner/admin flows,
-- validate MIME type,
-- validate file size,
-- generate server-side object keys,
-- never trust the browser-supplied filename as a storage path,
-- do not expose a public bucket for identity documents.
+Production same-origin deployment should minimize CORS complexity.
 
 ---
 
-# 24. pg-boss — Durable Background Jobs
+# 29. Testing
 
-## Why We Need a Worker
+The first priority is backend business-rule testing.
 
-Some RouteBite operations happen later:
+Use **Jest + Supertest**.
 
-```text
-offer expires after ~20 seconds
-price approval expires after ~3 minutes
-scheduled matching work may become due
-stale matching attempts need recovery
-```
-
-Using JavaScript `setTimeout()` for these business-critical operations is unsafe.
-
-If the server restarts:
+Critical tests include:
 
 ```text
-memory timer disappears
+two partners accept same order → exactly one succeeds
+expired offer cannot be accepted
+matching cannot start before payment confirmation
+unapproved partner cannot go online
+partner with active order cannot accept incompatible second order
+wrong delivery OTP cannot complete order
+same Razorpay webhook processed twice → financial state changes once
+completed order cannot be cancelled normally
 ```
 
-The order could become stuck forever.
+Frontend automated testing may be added after the core prototype works.
 
-## Why pg-boss
-
-`pg-boss` stores background jobs in PostgreSQL.
-
-That gives us durable work **without introducing Redis or RabbitMQ**.
-
-Conceptual flow:
-
-```text
-API transaction creates offer
-        ↓
-a durable expiry job is scheduled
-        ↓
-API process can restart
-        ↓
-job still exists in PostgreSQL
-        ↓
-worker processes expiry safely
-```
-
-## Worker Rule
-
-Every job handler must be **idempotent**.
-
-An offer-expiry job should check current database state before changing anything.
-
-Example:
-
-```text
-if offer already ACCEPTED → do nothing
-if offer already EXPIRED  → do nothing
-if order already ASSIGNED → do nothing
-otherwise expire safely
-```
-
-The database remains authoritative; the job queue does not replace order state.
-
-## Learn
-
-- background jobs,
-- durable queues,
-- retries,
-- idempotency,
-- delayed jobs,
-- worker concurrency,
-- dead-letter/failure concepts.
+A written end-to-end rehearsal remains mandatory before presentation.
 
 ---
 
-# 25. Google Maps Platform
+# 30. Logging
 
-RouteBite depends on maps for more than displaying a map.
+Do not add a full observability platform initially.
 
-Required capabilities include:
+Create a small structured logging utility.
 
-```text
-place/vendor search
-manual pickup/drop pin
-coordinates
-route calculation
-distance
-ETA
-route matrix
-route polyline / geometry
-```
-
-## Frontend Responsibilities
-
-The React app uses the Maps JavaScript API for:
-
-```text
-interactive map
-place search UI
-manual pin selection
-route visualization
-partner location display
-```
-
-Keep Google Maps code behind internal components/services rather than scattering API calls through pages.
-
-Example internal boundary:
-
-```text
-<MapPicker />
-<OrderTrackingMap />
-```
-
-## Backend Responsibilities
-
-The NestJS `MapsModule` owns server-side route/distance/ETA calls needed for matching.
-
-Never rely on a customer browser to provide a trusted travel-time calculation for backend matching.
-
-## Cost-Safety Rule
-
-Do not call Routes/Matrix every time GPS coordinates change.
-
-Use:
-
-```text
-cheap coarse filter
-      ↓
-small candidate shortlist
-      ↓
-Google route calculations
-```
-
-Restrict API keys by environment/application/API and configure quotas/billing alerts in Google Cloud.
-
-## Learn
-
-- latitude/longitude,
-- geocoding,
-- Places,
-- routes,
-- distance matrix concepts,
-- polylines,
-- browser vs server API keys,
-- quotas and billing.
-
----
-
-# 26. Razorpay Test Mode
-
-Razorpay is used to demonstrate the checkout flow.
-
-The prototype uses **Test Mode only**.
-
-Flow:
-
-```text
-NestJS creates payment/order intent
-        ↓
-React opens Razorpay test checkout
-        ↓
-provider returns test result
-        ↓
-backend verifies authoritative result/callback
-        ↓
-backend marks payment confirmed
-        ↓
-matching begins
-```
-
-## Critical Payment Rule
-
-Never trust only this:
-
-```text
-frontend says "payment successful"
-```
-
-The backend must verify provider information/signature/callback according to the integration design.
-
-Provider callbacks may be duplicated.
-
-Therefore payment processing must be **idempotent**.
-
-## Learn
-
-- payment order/intents,
-- checkout,
-- signatures,
-- webhooks,
-- idempotency,
-- test vs live mode,
-- why client confirmation is not sufficient.
-
----
-
-# 27. Pino — Structured Logging
-
-`console.log()` is not enough once several users/orders exist simultaneously.
-
-Pino writes structured logs such as:
-
-```json
-{
-  "level": "info",
-  "event": "order.assigned",
-  "orderId": "ord_123",
-  "partnerId": "par_456",
-  "requestId": "req_789"
-}
-```
-
-Useful correlation fields include:
+Every important log should include identifiers when available:
 
 ```text
 requestId
-userId
 orderId
 partnerId
-tripId
-paymentId
-jobId
+userId
+event
 ```
 
-## Never Log
+Never log:
 
-- OTP values,
-- auth tokens,
-- payment secrets,
-- full identity documents,
-- sensitive file URLs,
-- passwords.
+- passwords,
+- JWTs,
+- raw OTPs outside explicit development mode,
+- identity document contents,
+- Razorpay secrets.
 
-Structured logs make demo failures far easier to investigate.
+If operational debugging later becomes difficult, a logging/monitoring service can be added.
 
 ---
 
-# 28. OpenAPI / Swagger
+# 31. Deployment
 
-The backend should expose/generate API documentation for development.
+The simplest production-like prototype deployment is **one Node service**.
 
-This provides:
+Build flow:
 
 ```text
-endpoint list
-request shapes
-response shapes
-status codes
-authentication requirements
+React/Vite source
+     ↓
+npm run build
+     ↓
+client/dist
+     ↓
+Express serves static build
 ```
 
-It is particularly useful before the frontend is complete because APIs can be tested independently.
+The same Express HTTP server also runs:
 
-Swagger is development/documentation tooling, not an authorization layer.
+```text
+/api REST routes
+Socket.IO
+small periodic background scans
+```
 
-Do not publicly expose sensitive development documentation in a production deployment without access controls.
+External managed components:
+
+```text
+MongoDB Atlas
+Cloudinary
+Google Maps
+Razorpay
+```
+
+Possible hosting:
+
+- Render,
+- Railway,
+- another Node-capable host.
+
+Do not split frontend/backend deployments unless there is a concrete reason.
 
 ---
 
-# 29. Testing Stack — Why Several Test Types Exist
+# 32. Repository Structure
 
-No single testing tool catches every class of bug.
-
-RouteBite's highest-risk bugs are state and concurrency bugs, so tests matter more than visual polish.
-
-## 29.1 Backend Unit Tests — Jest
-
-Test isolated domain behavior such as:
+Recommended implementation structure:
 
 ```text
-valid/invalid order transitions
-price adjustment rules
-matching eligibility helpers
-OTP attempt rules
-partner capability rules
+routebite/
+├── client/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── context/
+│   │   ├── hooks/
+│   │   ├── services/
+│   │   └── utils/
+│   └── package.json
+│
+├── server/
+│   ├── src/
+│   │   ├── config/
+│   │   ├── constants/
+│   │   ├── controllers/
+│   │   ├── middleware/
+│   │   ├── models/
+│   │   ├── routes/
+│   │   ├── services/
+│   │   ├── sockets/
+│   │   ├── jobs/
+│   │   └── utils/
+│   ├── tests/
+│   └── package.json
+│
+├── docs/
+├── package.json
+├── .env.example
+└── README.md
 ```
 
-Unit tests should be fast and deterministic.
-
-## 29.2 API Integration Tests — Jest + Supertest
-
-Supertest calls the NestJS HTTP application like a client.
-
-Use it to test:
+A root `package.json` may provide convenience scripts such as:
 
 ```text
-unauthorized user cannot approve partner
-payment must precede matching
-only assigned partner may mark pickup
-invalid transition returns 409/appropriate error
+npm run dev
+npm run client
+npm run server
+npm test
+npm run build
+npm start
 ```
 
-Where practical, integration tests should run against a real test PostgreSQL database rather than mocking every database behavior.
-
-## 29.3 Frontend Tests — Vitest + React Testing Library
-
-Test important UI behavior such as:
-
-```text
-matching screen displays correct state
-price approval shows difference
-admin buttons respect permissions in UI
-invalid form input shows errors
-```
-
-Do not write tests that only check implementation details.
-
-## 29.4 End-to-End — Playwright
-
-Playwright drives a real browser.
-
-The most important prototype test is the complete happy path:
-
-```text
-customer login
-partner ready
-customer creates order
-test payment
-matching
-offer accept
-pickup
-price confirmation
-delivery OTP
-completion
-```
-
-Also automate at least a few high-risk failures:
-
-```text
-two accept attempts
-wrong OTP
-no partner found
-price increase rejected
-```
-
-## Learn
-
-- unit vs integration vs E2E,
-- mocking,
-- fixtures,
-- deterministic test data,
-- database cleanup,
-- race-condition tests.
+No monorepo tool is required.
 
 ---
 
-# 30. ESLint, Prettier, Strict TypeScript
+# 33. Technologies Explicitly NOT Required Initially
 
-These are not cosmetic extras.
-
-## TypeScript Strict Mode
-
-Enable strict compiler checks.
-
-Do not silence errors by spreading `any` across the codebase.
-
-## ESLint
-
-Use rules that catch dangerous patterns such as:
+Do not add these to the prototype unless a concrete problem appears:
 
 ```text
-floating promises
-unused values
-unsafe any usage
-incorrect async handling
-```
-
-## Prettier
-
-Prettier standardizes formatting so developers do not waste time arguing over indentation and line wrapping.
-
-CI should fail when required static checks fail.
-
----
-
-# 31. Environment Configuration
-
-Never commit secrets.
-
-Use environment variables for values such as:
-
-```text
-DATABASE_URL
-SUPABASE_URL
-SUPABASE keys
-GOOGLE_MAPS keys
-RAZORPAY keys
-AUTH configuration
-storage configuration
-```
-
-Commit only:
-
-```text
-.env.example
-```
-
-with placeholder values.
-
-## Validate Environment at Startup
-
-Use Zod to validate required backend configuration.
-
-If `DATABASE_URL` or another mandatory variable is missing, the server should fail immediately with a clear startup error instead of crashing later during an order.
-
----
-
-# 32. GitHub Actions — Continuous Integration
-
-Every pull request / important push should run automated checks such as:
-
-```text
-install dependencies
-lint
-typecheck
-unit tests
-integration tests where configured
-frontend build
-backend build
-Prisma schema validation
-```
-
-The goal is simple:
-
-> Broken code should be discovered before it reaches the demo deployment.
-
-Do not automatically deploy a branch when its build/tests fail.
-
----
-
-# 33. Docker — Reproducible Backend Runtime
-
-Docker packages the backend with its runtime dependencies.
-
-The same image can be started as:
-
-```text
-API process
-```
-
-or:
-
-```text
-Worker process
-```
-
-using different commands.
-
-Example conceptual deployment:
-
-```text
-same source + same image
-
-API:
-node dist/main.js
-
-Worker:
-node dist/worker.js
-```
-
-This prevents API and worker from accidentally running different domain code versions.
-
-Local development does not have to run the React dev server inside Docker unless that improves the workflow.
-
----
-
-# 34. Deployment Choice
-
-## Frontend — Vercel
-
-Use Vercel for the React/Vite frontend because deployment of static/browser applications is straightforward.
-
-Frontend environment configuration contains only values safe for browser exposure.
-
-**Never put server secrets into `VITE_*` variables**, because Vite browser environment variables are bundled into client code.
-
-## API + Worker — Railway
-
-Use Railway for long-running Node processes.
-
-Deploy two processes from the same backend source/image:
-
-```text
-routebite-api
-routebite-worker
-```
-
-This supports our architecture better than trying to place critical WebSocket/background-worker behavior into short-lived serverless functions.
-
-## Database/Auth/Files — Supabase
-
-Supabase hosts:
-
-```text
+NestJS
 PostgreSQL
-Auth
-Storage
-```
-
-## Portability Rule
-
-Provider-specific behavior must stay behind adapters/configuration.
-
-The product should still conceptually be:
-
-```text
-React app
-NestJS API/worker
-PostgreSQL
-object storage
-external maps/payment/auth adapters
-```
-
-not "a Vercel/Railway/Supabase application".
-
----
-
-# 35. Suggested NestJS Modules
-
-Keep module boundaries aligned to business responsibilities.
-
-```text
-AppModule
-│
-├── AuthModule
-├── UsersModule
-├── PartnersModule
-├── AdminModule
-│
-├── OrdersModule
-├── TripsModule
-├── MatchingModule
-├── OffersModule
-├── TrackingModule
-│
-├── PaymentsModule
-├── LedgerModule
-│
-├── MapsModule
-├── FilesModule
-├── NotificationsModule
-│
-├── JobsModule
-└── ObservabilityModule
-```
-
-## Dependency Direction Rule
-
-Avoid circular domain dependencies.
-
-For example, `MatchingModule` may ask `PartnersModule` for eligible supply, but partner code should not directly know all internals of matching.
-
-Where several modules need to coordinate, use an application/orchestration service rather than letting modules call each other randomly.
-
----
-
-# 36. Suggested Frontend Organization
-
-```text
-apps/web/src/
-├── app/
-│   ├── router/
-│   ├── providers/
-│   └── layout/
-│
-├── features/
-│   ├── auth/
-│   ├── orders/
-│   ├── partner/
-│   ├── trips/
-│   ├── matching/
-│   ├── tracking/
-│   ├── payments/
-│   └── admin/
-│
-├── components/
-│   ├── ui/
-│   └── maps/
-│
-├── lib/
-│   ├── api/
-│   ├── auth/
-│   └── realtime/
-│
-└── main.tsx
-```
-
-Organize by product feature rather than creating giant global folders such as:
-
-```text
-all-components/
-all-hooks/
-all-services/
-```
-
-that eventually contain unrelated code.
-
----
-
-# 37. State Ownership — Critical Bug-Prevention Rule
-
-Every important state should have one obvious owner.
-
-| State | Owner |
-|---|---|
-| Order status | PostgreSQL/backend |
-| Payment status | PostgreSQL/backend |
-| Partner verification | PostgreSQL/backend |
-| Trip status | PostgreSQL/backend |
-| Offer status | PostgreSQL/backend |
-| Demo ledger | PostgreSQL/backend |
-| Live current GPS sample | Partner client → backend operational state |
-| Cached API response | TanStack Query |
-| Temporary open/closed UI panel | React/Zustand |
-
-If two systems both believe they are authoritative, bugs are likely.
-
----
-
-# 38. State Machines — Backend Only
-
-Order transitions must be centralized.
-
-Do not write scattered code like:
-
-```ts
-order.status = "PICKED_UP";
-```
-
-from random controllers.
-
-Instead use commands/services such as:
-
-```text
-assignPartner()
-confirmPrice()
-markPickedUp()
-startDelivery()
-verifyDeliveryOtp()
-cancelBeforePurchase()
-```
-
-Each operation validates:
-
-```text
-current state
-actor permission
-required dependent state
-time constraints
-idempotency
-```
-
-The same principle applies to:
-
-```text
-payment state
-trip state
-offer state
-partner verification state
-```
-
-This is one of the most important low-bug design choices in the project.
-
----
-
-# 39. Concurrency Rules
-
-The following operations must not depend on frontend timing.
-
-## Partner Acceptance
-
-Two partners can click Accept at nearly the same time.
-
-The backend/database must atomically choose one.
-
-## Payment Callback
-
-The provider may send the same callback more than once.
-
-Processing must be idempotent.
-
-## Job Retry
-
-A worker job may retry after partial failure.
-
-The handler must check durable state before applying an operation again.
-
-## Demo Ledger
-
-A completed order must not create partner earning twice.
-
-Use unique/idempotency constraints.
-
-## Cancellation vs Acceptance
-
-Customer cancellation and partner acceptance may race.
-
-The database transaction decides which valid state transition wins.
-
-These rules will be made concrete in `DATABASE_DESIGN.md` and `API_DESIGN.md`.
-
----
-
-# 40. Error Handling Standard
-
-Backend errors should have a consistent machine-readable shape.
-
-Conceptually:
-
-```json
-{
-  "error": {
-    "code": "ORDER_ALREADY_ASSIGNED",
-    "message": "This order has already been assigned.",
-    "requestId": "req_123"
-  }
-}
-```
-
-Use explicit domain error codes rather than forcing the frontend to parse human-readable text.
-
-Examples:
-
-```text
-ORDER_INVALID_STATE
-ORDER_ALREADY_ASSIGNED
-PARTNER_NOT_APPROVED
-OFFER_EXPIRED
-LOCATION_STALE
-PAYMENT_NOT_CONFIRMED
-PRICE_APPROVAL_REQUIRED
-OTP_INVALID
-OTP_EXPIRED
-FORBIDDEN
-```
-
----
-
-# 41. What We Are Explicitly NOT Adding Yet
-
-Do not add the following during initial prototype implementation unless a demonstrated requirement changes the decision:
-
-```text
-Spring Boot second backend
-Python second backend
-microservices
-Kafka
+Prisma
+Supabase
+Redis
+BullMQ
+pg-boss
 RabbitMQ
-Redis as correctness dependency
+Kafka
+Redux
+Zustand
+TanStack Query
+Docker
 Kubernetes
 GraphQL
-Next.js backend/server actions
-MongoDB
-PostGIS
+Microservices
+Event sourcing
+CQRS infrastructure
 Elasticsearch
-Firebase database
-multiple ORMs
-multiple UI frameworks
-ML ranking
-native mobile apps
+Playwright/Cypress before core flow works
 ```
 
-This is not because those technologies are bad.
+This is not a claim that these technologies are bad.
 
-They solve problems RouteBite does not currently have.
-
-Every additional runtime/system increases:
-
-```text
-configuration
-failure modes
-local setup
-CI complexity
-deployment complexity
-knowledge required to debug the prototype
-```
+They are simply unnecessary for the current prototype.
 
 ---
 
-# 42. Why Not Java/Spring Boot for This Prototype
+# 34. What a Developer Should Learn First
 
-Spring Boot is an excellent backend stack and would be a reasonable production choice.
+If the developer already knows MERN, review in this order:
 
-For this prototype, NestJS/TypeScript is preferred because:
+```text
+1. Express layered architecture
+2. Mongoose atomic updates
+3. MongoDB transactions
+4. MongoDB 2dsphere geospatial indexes
+5. Socket.IO rooms/events
+6. JWT HttpOnly cookie authentication
+7. Google Maps Routes / ETA concepts
+8. Razorpay test payment verification/webhooks
+9. Cloudinary private uploads
+10. Race-condition and idempotency testing
+```
 
-- frontend and backend use one language,
-- API contracts can be shared directly,
-- Socket.IO integration is straightforward,
-- iteration is faster for a small web prototype,
-- the architecture does not require JVM-specific capabilities.
+The most important new concepts are not new frameworks. They are **correctness concepts**:
 
-This is a **project-stage decision**, not a claim that Node.js is more powerful or reliable than Java.
-
-If RouteBite later develops a backend team centered on Java, the modular domain boundaries documented here would make a gradual service rewrite possible without changing the product model.
-
-Do not build two backends now just to demonstrate multiple languages.
+- atomic updates,
+- transactions,
+- idempotency,
+- state machines,
+- expiry timestamps,
+- authoritative backend state.
 
 ---
 
-# 43. Learning Order for a Developer New to This Stack
+# 35. Final Stack Principle
 
-Do not attempt to master every technology before starting.
-
-Learn in this order:
-
-## Phase 1 — Language and Web Fundamentals
+The prototype is **MERN first, specialized services second**.
 
 ```text
-TypeScript
-async/await
-HTTP + REST
-JSON
-basic SQL
-Git
+MERN handles:
+UI
+API
+business logic
+authentication
+data
+geospatial shortlist
+state transitions
+
+Socket.IO handles:
+realtime UI communication
+
+Google Maps handles:
+road/map/routing intelligence
+
+Razorpay handles:
+payment checkout
+
+Cloudinary handles:
+file storage
 ```
 
-## Phase 2 — Frontend
-
-```text
-React
-Vite
-React Router
-React Hook Form
-Zod
-TanStack Query
-Tailwind
-```
-
-## Phase 3 — Backend
-
-```text
-Node.js
-NestJS modules/controllers/services/guards
-Zod boundary validation
-REST error handling
-```
-
-## Phase 4 — Database
-
-```text
-PostgreSQL
-transactions
-indexes
-constraints
-Prisma
-migrations
-```
-
-Do not skip transaction/constraint fundamentals. They are central to RouteBite correctness.
-
-## Phase 5 — Integrations
-
-```text
-Google Maps
-Supabase Auth/Storage
-Razorpay Test Mode
-Socket.IO
-```
-
-## Phase 6 — Reliability
-
-```text
-idempotency
-background jobs with pg-boss
-concurrency/race conditions
-structured logging
-testing
-```
-
-## Phase 7 — Deployment
-
-```text
-Docker
-GitHub Actions
-Vercel
-Railway
-Supabase production configuration
-```
-
----
-
-# 44. Minimum Topics to Read Before Implementing Each Area
-
-## Before Authentication
-
-Read about:
-
-```text
-authentication vs authorization
-JWT/session lifecycle
-backend route guards
-OTP expiry/rate limiting
-```
-
-## Before Orders
-
-Read about:
-
-```text
-REST API design
-Zod validation
-state machines
-PostgreSQL transactions
-```
-
-## Before Matching
-
-Read:
-
-```text
-latitude/longitude
-Haversine distance
-route ETA
-Google Routes / Route Matrix
-transaction-safe assignment
-```
-
-## Before Realtime
-
-Read:
-
-```text
-WebSocket vs HTTP
-Socket.IO rooms
-reconnection
-server truth vs UI notifications
-```
-
-## Before Payments
-
-Read:
-
-```text
-webhooks
-signature verification
-idempotency
-integer money representation
-payment vs order state
-```
-
-## Before Worker Jobs
-
-Read:
-
-```text
-durable jobs
-retries
-idempotent handlers
-why setTimeout is not durable
-```
-
----
-
-# 45. Prototype Development Rules
-
-To keep the bug rate low:
-
-1. **P0 before P1/P2.** Finish the complete core flow before polish.
-2. **One source of truth.** Business state lives in PostgreSQL.
-3. **Validate twice.** Friendly validation in frontend; authoritative validation in backend.
-4. **No magic status changes.** All state changes go through domain/application commands.
-5. **No floating money.** Use integer paise.
-6. **No local-time database logic.** Store UTC timestamps.
-7. **No critical in-memory timers.** Use durable jobs.
-8. **No client-trusted payments.** Backend verifies payment state.
-9. **No client-trusted authorization.** Backend enforces permissions.
-10. **No socket-only truth.** Realtime events follow database commits.
-11. **No duplicate business effects.** Critical handlers are idempotent.
-12. **No secrets in Git/browser bundles.** Validate environment configuration.
-13. **No schema edits without migrations.** Database changes are versioned.
-14. **No major dependency upgrades immediately before the demo.** Stabilize the stack.
-15. **Test race conditions and failure paths, not only the happy path.**
-
----
-
-# 46. Final Runtime Picture
-
-```text
-                    ┌─────────────────────┐
-                    │      Browser        │
-                    │ React + TypeScript  │
-                    │ Vite                │
-                    │ TanStack Query      │
-                    │ Socket.IO Client    │
-                    └─────────┬───────────┘
-                              │
-                   REST + authenticated
-                       Socket.IO events
-                              │
-                              ▼
-                    ┌─────────────────────┐
-                    │    NestJS API       │
-                    │                     │
-                    │ Auth / Orders       │
-                    │ Partners / Trips    │
-                    │ Matching / Offers   │
-                    │ Payments / Tracking │
-                    │ Admin               │
-                    └──────┬─────┬────────┘
-                           │     │
-              transactions │     │ provider adapters
-                           │     │
-                           ▼     ├────────► Google Maps
-                 ┌──────────────┐├────────► Razorpay Test
-                 │ PostgreSQL   │└────────► Supabase Auth/Storage
-                 │  Supabase    │
-                 └──────┬───────┘
-                        │
-                        │ durable jobs
-                        ▼
-                 ┌──────────────┐
-                 │ Nest Worker  │
-                 │  + pg-boss   │
-                 └──────────────┘
-```
-
-Runtime deployment:
-
-```text
-Frontend → Vercel
-API      → Railway
-Worker   → Railway
-DB/Auth/Storage → Supabase
-Maps     → Google Maps Platform
-Payment  → Razorpay Test Mode
-CI       → GitHub Actions
-```
-
----
-
-# 47. Technology Change Rule
-
-A technology should not be replaced merely because another tool is newer or more fashionable.
-
-Before changing a core technology, document:
-
-1. what concrete problem exists,
-2. why the current tool cannot reasonably solve it,
-3. what new complexity the replacement introduces,
-4. migration cost,
-5. effect on testing/deployment,
-6. whether `ARCHITECTURE.md` or `DECISIONS.md` must change.
-
-Examples:
-
-```text
-Add Redis because "delivery apps use Redis"     → not sufficient.
-
-Add Redis because measured candidate/location workload
-cannot meet latency targets using PostgreSQL alone → valid reason to evaluate.
-```
-
-Likewise:
-
-```text
-Add PostGIS because it sounds advanced → not sufficient.
-
-Add PostGIS because city-scale spatial candidate discovery
-is measurably slow/complex without spatial indexes → valid reason.
-```
-
----
-
-# 48. Next Documents After This Stack
-
-Now that architecture and technology choices are fixed, the next design documents should be written in this order:
-
-```text
-1. DATABASE_DESIGN.md
-   ↓
-2. API_DESIGN.md
-   ↓
-3. project scaffold
-   ↓
-4. first P0 implementation vertical slice
-```
-
-`DATABASE_DESIGN.md` should make the concurrency/state rules concrete using tables, constraints, indexes, and transactions.
-
-`API_DESIGN.md` should then define commands/responses against that data model.
-
-Only after those documents are aligned should we generate the main project skeleton.
+This is sufficient to build the complete RouteBite prototype without forcing the project into unnecessary infrastructure.
