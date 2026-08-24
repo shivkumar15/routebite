@@ -1,2292 +1,1272 @@
 # RouteBite — Database Design
 
-> **Status:** Prototype database specification
+> **Status:** CONFIRMED FOR PROTOTYPE
 >
-> This document defines the durable data model for the first working RouteBite prototype. It is derived from `PROJECT_CONTEXT.md`, `DECISIONS.md`, `USER_FLOWS.md`, `PRODUCT_REQUIREMENTS.md`, `PAYMENT_FLOW.md`, `MATCHING_ENGINE.md`, `ARCHITECTURE.md`, and `TECH_STACK.md`.
+> RouteBite will use **MongoDB Atlas + Mongoose** as the durable database layer for the first working prototype.
 >
-> The primary goal is **data correctness before query cleverness**. The database must make the most dangerous application bugs difficult or impossible: double assignment, duplicate payment processing, duplicate partner earnings, invalid status values, lost timers, accidental public identity documents, and inconsistent order history.
+> The goal is not merely to store documents. The database design must make the most dangerous bugs difficult: double assignment, partner accepting two active orders, duplicate payment processing, duplicate earnings, accepting expired offers, invalid status values, lost deadlines and stale geolocation data.
 
 ---
 
-# 1. Database Goal
+# 1. Database Principle
 
-RouteBite will use **PostgreSQL as the single authoritative durable database** for the prototype.
+> **MongoDB is the authoritative source of business truth.**
 
-The database stores business truth such as:
+If losing a value after a Node.js restart would make an order incorrect, persist it.
+
+Durable data includes:
 
 ```text
-Users
-Partner profiles
-Partner verification
-Partner current operational state
-Scheduled/on-my-way trips
-Orders
-Matching runs
-Partner offers
-Assignments
-Payment attempts
-Provider webhook events
-Price-adjustment state
-Demo ledger entries
-Delivery OTP state
-Ratings
-Admin review cases
-Audit/order events
-Uploaded-file metadata
+users
+partner profiles
+trips
+orders
+offers
+payments
+provider webhook events
+ledger entries
 ```
 
-The database does **not** need to permanently store every high-frequency GPS coordinate.
-
-The architecture rule is:
-
-> **If losing a piece of data after a server restart would make an order incorrect, that data belongs in PostgreSQL.**
+Operational current location is also stored, but the prototype does not need permanent second-by-second GPS history.
 
 ---
 
-# 2. Database Technology
+# 2. Why MongoDB Fits the Prototype
 
-Prototype database stack:
+MongoDB fits the MERN-first implementation because it provides:
 
-```text
-PostgreSQL
-   ↓
-Managed by Supabase
-   ↓
-Accessed by NestJS backend
-   ↓
-Prisma ORM for normal queries/migrations
-```
+- familiar JavaScript document access,
+- atomic single-document updates,
+- multi-document transactions,
+- unique indexes,
+- geospatial `2dsphere` indexes,
+- flexible nested order data,
+- managed Atlas hosting.
 
-PostgreSQL is chosen because RouteBite contains strongly related transactional data:
+The project will not treat MongoDB as an excuse to avoid schema design.
 
-```text
-Order
-  ↔ Customer
-  ↔ Partner
-  ↔ Matching offers
-  ↔ Assignment
-  ↔ Payment
-  ↔ Delivery state
-```
-
-These relationships benefit from:
-
-- transactions,
-- foreign keys,
-- unique constraints,
-- indexes,
-- row-level locking,
-- conditional updates,
-- strong consistency.
-
-A document database such as MongoDB would not simplify the most difficult RouteBite problems, which are mainly transactional/concurrency problems.
+Mongoose schemas, enums, indexes and service-level invariants are mandatory.
 
 ---
 
-# 3. Database Ownership Boundaries
+# 3. Core Collections
 
-Supabase provides multiple PostgreSQL schemas internally.
-
-RouteBite application tables should live in:
+The prototype should start with these collections:
 
 ```text
-public
+users
+partners
+trips
+orders
+offers
+payments
+webhookEvents
+ledgerEntries
 ```
 
-Supabase-managed authentication data lives in:
+This is intentionally smaller than a highly normalized relational design.
 
-```text
-auth
-```
-
-Supabase Storage metadata lives in:
-
-```text
-storage
-```
-
-`pg-boss` may create/manage its own internal job tables/schema.
-
-## Important rule
-
-Prisma migrations should own **RouteBite application tables only**.
-
-Do not let Prisma attempt to redesign Supabase's internal `auth` or `storage` schemas.
-
-The frontend must not directly treat PostgreSQL tables as its application API. Normal product data access goes through the NestJS backend.
+Data that belongs tightly to one order can be embedded inside the order document.
 
 ---
 
-# 4. Authentication User vs Application User
+# 4. IDs
 
-Supabase Auth is the authentication source of truth.
+Use MongoDB `ObjectId` for internal document identifiers.
 
-It owns credentials/OTP/session identity.
+API responses may expose IDs as strings.
 
-RouteBite must **not** store:
+Do not use user-provided values as primary identifiers.
 
-```text
-passwords
-raw auth refresh tokens
-SMS OTP secrets from Supabase Auth
-```
-
-RouteBite has its own application `users` table containing product profile data.
-
-The application user ID should use the same UUID as the authenticated Supabase user ID.
-
-Conceptually:
-
-```text
-Supabase Auth User
-id = 550e8400-...
-
-        ↓ same UUID
-
-RouteBite public.users
-id = 550e8400-...
-```
-
-This gives one stable user identifier throughout the system without duplicating authentication credentials.
-
-The backend creates/upserts the RouteBite profile after a valid authenticated identity is established.
+External provider IDs such as Razorpay payment IDs are stored separately and indexed uniquely where required.
 
 ---
 
-# 5. Global Database Conventions
+# 5. Money Type
 
-## 5.1 Primary keys
-
-Use UUID primary keys for RouteBite business entities.
+All monetary values use **integer paise**.
 
 Examples:
 
 ```text
-user_id
-order_id
-trip_id
-payment_id
-offer_id
-assignment_id
+₹200.00 → 20000
+₹40.00  → 4000
+₹10.00  → 1000
 ```
 
-Reasons:
+Mongoose money fields should validate:
 
-- difficult to guess sequential IDs,
-- easy creation across environments,
-- compatible with Supabase Auth UUIDs,
-- safe to expose as resource identifiers when authorization is still enforced.
+```text
+Number.isSafeInteger(value)
+value >= 0
+```
+
+Do not store authoritative money as floating-point rupees.
 
 ---
 
-## 5.2 Timestamps
+# 6. Time Type
 
-All durable timestamps use PostgreSQL:
-
-```text
-timestamptz
-```
-
-Store timestamps in UTC.
+Use MongoDB/Mongoose `Date` values representing UTC timestamps.
 
 Examples:
 
 ```text
-created_at
-updated_at
-expires_at
-scheduled_departure_at
-assigned_at
-verified_at
+createdAt
+updatedAt
+expiresAt
+scheduledDepartureAt
+deliveryWindowStart
+deliveryWindowEnd
+pickedUpAt
+completedAt
 ```
 
-The frontend converts timestamps to the user's local timezone for display.
+The frontend converts timestamps to local display time.
 
-Never store important times as formatted strings such as:
+---
+
+# 7. Location Type
+
+Use GeoJSON for important points.
+
+```js
+{
+  type: "Point",
+  coordinates: [longitude, latitude]
+}
+```
+
+**Longitude comes first.**
+
+This is a common source of bugs and should be documented in code.
+
+Create `2dsphere` indexes where nearby queries are required.
+
+---
+
+# 8. User Collection
+
+Conceptual `users` document:
+
+```js
+{
+  _id,
+  name,
+  phone,
+  phoneVerified,
+  email,
+  passwordHash,
+  role: "USER" | "ADMIN",
+  tokenVersion,
+
+  phoneVerification: {
+    otpHash,
+    expiresAt,
+    attempts
+  },
+
+  createdAt,
+  updatedAt
+}
+```
+
+## Indexes
 
 ```text
-"6:30 PM"
+phone unique
+email unique sparse/partial when present
+```
+
+## Rules
+
+- raw password never stored,
+- raw OTP never stored,
+- admin role cannot be self-selected through public APIs.
+
+---
+
+# 9. Partner Collection
+
+A user becomes a partner by creating a separate partner profile.
+
+Conceptual document:
+
+```js
+{
+  _id,
+  userId,
+
+  verificationStatus:
+    "PENDING_VERIFICATION" |
+    "APPROVED" |
+    "REJECTED",
+
+  profilePhoto: {
+    publicId,
+    resourceType
+  },
+
+  collegeIdentity: {
+    enrollmentNumber,
+    collegeName,
+    documentPublicId,
+    reviewedAt,
+    reviewedBy
+  },
+
+  availabilityStatus:
+    "OFFLINE" |
+    "AVAILABLE_NOW",
+
+  currentLocation: {
+    type: "Point",
+    coordinates: [lng, lat]
+  },
+
+  locationUpdatedAt,
+
+  activeOrderId,
+
+  ratingAverage,
+  ratingCount,
+  completedOrderCount,
+  cancelledOrderCount,
+
+  createdAt,
+  updatedAt
+}
+```
+
+## Indexes
+
+```text
+userId unique
+currentLocation 2dsphere
+verificationStatus + availabilityStatus
+activeOrderId
+```
+
+## Important invariant
+
+For the prototype:
+
+> A partner may have at most one active assigned order.
+
+This is enforced through conditional partner updates inside assignment transactions.
+
+---
+
+# 10. Trip Collection
+
+Conceptual scheduled/on-my-way trip:
+
+```js
+{
+  _id,
+  partnerId,
+
+  status:
+    "TRIP_SCHEDULED" |
+    "TRIP_ACTIVE" |
+    "TRIP_COMPLETED" |
+    "TRIP_CANCELLED",
+
+  origin: GeoJSONPoint,
+  destination: GeoJSONPoint,
+
+  originText,
+  destinationText,
+
+  scheduledDepartureAt,
+  departureFlexMinutes,
+
+  routePolyline,
+  routeDistanceMeters,
+  routeDurationSeconds,
+
+  startedAt,
+  completedAt,
+
+  currentProgressMeters,
+
+  createdAt,
+  updatedAt
+}
+```
+
+## Indexes
+
+```text
+partnerId + status
+status + scheduledDepartureAt
+origin 2dsphere (optional but useful)
+destination 2dsphere (optional but useful)
+```
+
+For V1, route compatibility is primarily application/Google Maps logic after coarse filtering.
+
+Do not over-engineer route geospatial storage.
+
+---
+
+# 11. Order Collection
+
+The order is the central business document.
+
+Conceptual structure:
+
+```js
+{
+  _id,
+  customerId,
+
+  status:
+    "DRAFT" |
+    "PAYMENT_PENDING" |
+    "TEST_PAYMENT_SUCCESS" |
+    "MATCHING" |
+    "ASSIGNED" |
+    "PARTNER_TO_PICKUP" |
+    "PRICE_CONFIRMATION_REQUIRED" |
+    "PICKED_UP" |
+    "OUT_FOR_DELIVERY" |
+    "DELIVERY_OTP_REQUIRED" |
+    "DELIVERED" |
+    "COMPLETED" |
+    "PAYMENT_FAILED" |
+    "MATCHING_FAILED" |
+    "CANCELLED" |
+    "FAILED" |
+    "ADMIN_REVIEW_REQUIRED",
+
+  vendorDisplayName,
+  pickupInstructions,
+  requestedItems,
+
+  pickup: GeoJSONPoint,
+  pickupText,
+
+  drop: GeoJSONPoint,
+  dropText,
+
+  deliveryType: "ASAP" | "SCHEDULED",
+  deliveryWindowStart,
+  deliveryWindowEnd,
+
+  assignedPartnerId,
+  assignedTripId,
+
+  pricing: {
+    estimatedFoodCostPaise,
+    actualFoodCostPaise,
+    customerDeliveryChargePaise,
+    partnerBaseEarningPaise,
+    partnerIncentivePaise,
+    platformFeePaise,
+    platformSubsidyPaise,
+    estimatedCustomerTotalPaise,
+    finalCustomerTotalPaise
+  },
+
+  priceAdjustment: {
+    status:
+      "NONE" |
+      "PENDING_CUSTOMER_APPROVAL" |
+      "APPROVED" |
+      "REJECTED" |
+      "TIMED_OUT" |
+      "AUTO_DECREASED",
+    differencePaise,
+    expiresAt,
+    approvedAt
+  },
+
+  receipt: {
+    cloudinaryPublicId,
+    uploadedAt
+  },
+
+  deliveryVerification: {
+    otpHash,
+    expiresAt,
+    attempts,
+    verifiedAt
+  },
+
+  liveDelivery: {
+    partnerLocation: GeoJSONPoint,
+    locationUpdatedAt
+  },
+
+  rating: {
+    stars,
+    feedback,
+    createdAt
+  },
+
+  adminReview: {
+    required,
+    reason,
+    resolved,
+    resolutionNote,
+    resolvedAt,
+    resolvedBy
+  },
+
+  timeline: [
+    {
+      type,
+      at,
+      actorType,
+      actorId,
+      metadata
+    }
+  ],
+
+  createdAt,
+  updatedAt,
+  completedAt
+}
 ```
 
 ---
 
-## 5.3 Money
+# 12. Order Indexes
 
-All money is stored as **integer paise**, never floating-point rupees.
-
-Example:
+Recommended indexes:
 
 ```text
-₹220.50
-↓
-22050 paise
+customerId + createdAt desc
+status + createdAt
+assignedPartnerId + status
+deliveryWindowEnd + status
+pickup 2dsphere (optional for operations/admin analytics)
 ```
 
-Recommended PostgreSQL type for prototype monetary fields:
+Do not create indexes without a query use case because every index has write/storage cost.
 
-```text
-INTEGER
-```
+---
 
-This safely supports values far beyond any prototype food order while avoiding JavaScript `BigInt` serialization complexity.
+# 13. Order Timeline
+
+For the prototype, a small embedded timeline is acceptable because an order has a bounded number of state events.
 
 Examples:
-
-```text
-estimated_food_cost_paise
-actual_food_cost_paise
-platform_fee_paise
-partner_earning_paise
-```
-
-Never use:
-
-```text
-FLOAT
-DOUBLE
-REAL
-```
-
-for money.
-
----
-
-## 5.4 Coordinates
-
-Latitude/longitude use PostgreSQL:
-
-```text
-DOUBLE PRECISION
-```
-
-with validation constraints:
-
-```text
--90  <= latitude  <= 90
--180 <= longitude <= 180
-```
-
-For the campus prototype we do **not require PostGIS initially**.
-
-Reason:
-
-- candidate volume is small,
-- coarse bounding/radius filtering is enough,
-- Google Maps performs road-routing calculations,
-- avoiding PostGIS reduces prototype setup and ORM complexity.
-
-PostGIS can be introduced later when geographic query volume justifies it.
-
----
-
-## 5.5 Naming
-
-Database physical names should use:
-
-```text
-snake_case
-```
-
-Examples:
-
-```text
-partner_profiles
-scheduled_departure_at
-estimated_food_cost_paise
-```
-
-TypeScript/Prisma code may expose camelCase fields while mapping them to snake_case database names.
-
-The naming convention must remain consistent once implementation begins.
-
----
-
-## 5.6 Nullability
-
-A column should be nullable only when the business concept is genuinely optional/not-yet-known.
-
-Example:
-
-```text
-actual_food_cost_paise = NULL
-```
-
-before the partner reaches the vendor is valid.
-
-But:
-
-```text
-customer_id = NULL
-```
-
-on a normal order is not valid.
-
-Avoid using `NULL` as an undocumented status value.
-
----
-
-# 6. High-Level Entity Relationship
-
-```text
-SUPABASE AUTH USER
-        │
-        ▼
-      users
-        │
-        ├──────────────► partner_profiles
-        │                      │
-        │                      ├────► partner_presence
-        │                      └────► trips
-        │
-        └──────────────► orders
-                               │
-                 ┌─────────────┼───────────────────────┐
-                 ▼             ▼                       ▼
-           matching_runs   payment_attempts       order_events
-                 │             │                       │
-                 ▼             ▼                       │
-          delivery_offers  payment_webhook_events      │
-                 │                                     │
-                 ▼                                     │
-          order_assignments ◄───────────────────────────┘
-                 │
-                 ├────► delivery_otps
-                 ├────► partner_earnings
-                 ├────► ratings
-                 └────► admin_cases
-
-uploaded_files may be referenced by partner verification
-and order receipt/proof records.
-```
-
----
-
-# 7. `users`
-
-Purpose:
-
-> RouteBite application profile corresponding to an authenticated Supabase user.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-full_name VARCHAR(120) NOT NULL
-phone_number VARCHAR(30) NULL
-profile_photo_file_id UUID NULL
-is_admin BOOLEAN NOT NULL DEFAULT FALSE
-created_at TIMESTAMPTZ NOT NULL
-updated_at TIMESTAMPTZ NOT NULL
-```
-
-## Important rules
-
-- `id` matches authenticated Supabase Auth UUID.
-- Do not store password hashes here when Supabase Auth is used.
-- `is_admin` may only be changed by trusted backend/admin migration logic.
-- Normal customer capability is implicit; a separate `CUSTOMER` role row is unnecessary.
-- Partner capability is determined by `partner_profiles.verification_status`.
-
-Why not build a complex RBAC system now?
-
-The prototype has only three practical capabilities:
-
-```text
-normal user
-approved partner
-admin
-```
-
-A generic permission engine would add complexity without solving a current problem.
-
----
-
-# 8. `uploaded_files`
-
-Purpose:
-
-> Store metadata for private files kept in Supabase Storage.
-
-The database stores file metadata, **not the file bytes**.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-owner_user_id UUID NOT NULL
-purpose FILE_PURPOSE NOT NULL
-storage_bucket VARCHAR(100) NOT NULL
-storage_path TEXT NOT NULL
-original_file_name TEXT NULL
-mime_type VARCHAR(120) NOT NULL
-size_bytes INTEGER NOT NULL
-created_at TIMESTAMPTZ NOT NULL
-```
-
-Recommended `FILE_PURPOSE` enum:
-
-```text
-PROFILE_PHOTO
-COLLEGE_ID
-PURCHASE_RECEIPT
-OTHER_PROTOTYPE_PROOF
-```
-
-Constraints:
-
-```text
-UNIQUE(storage_bucket, storage_path)
-size_bytes > 0
-```
-
-## Security rule
-
-`COLLEGE_ID` and `PURCHASE_RECEIPT` files must be stored in private buckets/paths.
-
-Do not persist a permanently public URL for sensitive documents.
-
-Backend-generated signed URLs should be short-lived when an authorized admin/customer/partner needs access.
-
----
-
-# 9. `partner_profiles`
-
-Purpose:
-
-> Store partner application and verification state for a RouteBite user.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-user_id UUID NOT NULL UNIQUE
-verification_status PARTNER_VERIFICATION_STATUS NOT NULL
-college_name VARCHAR(180) NULL
-enrollment_number VARCHAR(100) NULL
-college_id_file_id UUID NULL
-profile_photo_file_id UUID NULL
-application_note TEXT NULL
-rejection_reason TEXT NULL
-reviewed_by_user_id UUID NULL
-reviewed_at TIMESTAMPTZ NULL
-created_at TIMESTAMPTZ NOT NULL
-updated_at TIMESTAMPTZ NOT NULL
-```
-
-Recommended enum:
-
-```text
-PENDING_VERIFICATION
-APPROVED
-REJECTED
-SUSPENDED
-```
-
-`SUSPENDED` is useful internally even if it is not a prominent prototype UI state.
-
-Constraints/rules:
-
-- one partner profile per user,
-- only `APPROVED` partners may receive offers,
-- approval/rejection actions must record reviewer/time,
-- do not call this government KYC.
-
----
-
-# 10. `partner_presence`
-
-Purpose:
-
-> Store the latest operational state/location needed for immediate matching.
-
-This table is **current state**, not permanent GPS history.
-
-Recommended fields:
-
-```text
-partner_id UUID PRIMARY KEY
-availability_status PARTNER_AVAILABILITY_STATUS NOT NULL
-current_latitude DOUBLE PRECISION NULL
-current_longitude DOUBLE PRECISION NULL
-last_location_at TIMESTAMPTZ NULL
-last_seen_at TIMESTAMPTZ NULL
-updated_at TIMESTAMPTZ NOT NULL
-```
-
-Recommended enum:
-
-```text
-OFFLINE
-AVAILABLE_NOW
-BUSY
-```
-
-`BUSY` is an internal operational state used to reduce accidental new offers while the partner already has an active assignment.
-
-## Location rule
-
-When `AVAILABLE_NOW`:
-
-```text
-current_latitude
-current_longitude
-last_location_at
-```
-
-should normally exist and be fresh enough for matching.
-
-When an order completes/cancels, the application decides whether the partner returns to `AVAILABLE_NOW` or `OFFLINE` based on the partner's chosen mode.
-
-## Privacy rule
-
-Do not create permanent second-by-second location history just because the client sends location updates.
-
-For the prototype, updating the current row is enough.
-
----
-
-# 11. `trips`
-
-Purpose:
-
-> Represent planned or active On-My-Way partner journeys.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-partner_id UUID NOT NULL
-status TRIP_STATUS NOT NULL
-origin_latitude DOUBLE PRECISION NOT NULL
-origin_longitude DOUBLE PRECISION NOT NULL
-origin_display_text TEXT NULL
-destination_latitude DOUBLE PRECISION NOT NULL
-destination_longitude DOUBLE PRECISION NOT NULL
-destination_display_text TEXT NULL
-encoded_route_polyline TEXT NULL
-route_distance_meters INTEGER NULL
-route_duration_seconds INTEGER NULL
-scheduled_departure_at TIMESTAMPTZ NOT NULL
-departure_flex_minutes INTEGER NOT NULL
-started_at TIMESTAMPTZ NULL
-completed_at TIMESTAMPTZ NULL
-cancelled_at TIMESTAMPTZ NULL
-current_progress_meters INTEGER NULL
-last_progress_updated_at TIMESTAMPTZ NULL
-created_at TIMESTAMPTZ NOT NULL
-updated_at TIMESTAMPTZ NOT NULL
-```
-
-Recommended enum:
-
-```text
-TRIP_SCHEDULED
-TRIP_ACTIVE
-TRIP_COMPLETED
-TRIP_CANCELLED
-```
-
-Constraints:
-
-```text
-departure_flex_minutes >= 0
-route_distance_meters >= 0 when not null
-route_duration_seconds >= 0 when not null
-current_progress_meters >= 0 when not null
-```
-
-## Important rule
-
-A `TRIP_SCHEDULED` record does not make the partner `AVAILABLE_NOW`.
-
-Trip state and immediate availability are deliberately separate concepts.
-
----
-
-# 12. `orders`
-
-Purpose:
-
-> Store the authoritative current state of a customer food-delivery request.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-customer_id UUID NOT NULL
-status ORDER_STATUS NOT NULL
-delivery_type DELIVERY_TYPE NOT NULL
-
-vendor_display_name VARCHAR(180) NOT NULL
-requested_items_text TEXT NOT NULL
-pickup_instructions TEXT NULL
-
-pickup_latitude DOUBLE PRECISION NOT NULL
-pickup_longitude DOUBLE PRECISION NOT NULL
-pickup_display_text TEXT NULL
-
-drop_latitude DOUBLE PRECISION NOT NULL
-drop_longitude DOUBLE PRECISION NOT NULL
-drop_display_text TEXT NULL
-
-requested_delivery_window_start TIMESTAMPTZ NOT NULL
-requested_delivery_window_end TIMESTAMPTZ NOT NULL
-
-estimated_food_cost_paise INTEGER NOT NULL
-actual_food_cost_paise INTEGER NULL
-customer_delivery_charge_paise INTEGER NOT NULL
-partner_base_earning_paise INTEGER NOT NULL
-partner_incentive_paise INTEGER NOT NULL DEFAULT 0
-platform_fee_paise INTEGER NOT NULL
-platform_subsidy_paise INTEGER NOT NULL DEFAULT 0
-estimated_customer_total_paise INTEGER NOT NULL
-final_customer_total_paise INTEGER NULL
-
-price_adjustment_status PRICE_ADJUSTMENT_STATUS NOT NULL DEFAULT 'NONE'
-price_confirmation_requested_at TIMESTAMPTZ NULL
-price_confirmation_expires_at TIMESTAMPTZ NULL
-price_confirmation_resolved_at TIMESTAMPTZ NULL
-
-receipt_file_id UUID NULL
-
-version INTEGER NOT NULL DEFAULT 0
-created_at TIMESTAMPTZ NOT NULL
-updated_at TIMESTAMPTZ NOT NULL
-completed_at TIMESTAMPTZ NULL
-cancelled_at TIMESTAMPTZ NULL
-```
-
-## 12.1 Recommended `ORDER_STATUS`
-
-```text
-DRAFT
-PAYMENT_PENDING
-MATCHING
-MATCHING_FAILED
-ASSIGNED
-PARTNER_TO_PICKUP
-PRICE_CONFIRMATION_REQUIRED
-PICKED_UP
-OUT_FOR_DELIVERY
-DELIVERY_OTP_REQUIRED
-DELIVERED
-COMPLETED
-CANCELLED
-FAILED
-ADMIN_REVIEW_REQUIRED
-```
-
-Payment status is **not** encoded inside this enum.
-
-That separation prevents confusing states such as trying to use one string to represent both:
-
-```text
-order logistics
-and
-payment settlement
-```
-
-## 12.2 `DELIVERY_TYPE`
-
-```text
-ASAP
-SCHEDULED
-```
-
-## 12.3 `PRICE_ADJUSTMENT_STATUS`
-
-```text
-NONE
-PENDING_CUSTOMER_APPROVAL
-APPROVED
-REJECTED
-TIMED_OUT
-AUTO_DECREASED
-```
-
-## 12.4 Order constraints
-
-Database/application migrations should enforce where practical:
-
-```text
-estimated_food_cost_paise >= 0
-actual_food_cost_paise >= 0 when not null
-customer_delivery_charge_paise >= 0
-partner_base_earning_paise >= 0
-partner_incentive_paise >= 0
-platform_fee_paise >= 0
-platform_subsidy_paise >= 0
-estimated_customer_total_paise >= 0
-final_customer_total_paise >= 0 when not null
-requested_delivery_window_start < requested_delivery_window_end
-```
-
-The order row is the source of truth for the **current order status and final order financial snapshot**.
-
----
-
-# 13. Why Requested Items Are Initially Stored as Text
-
-The prototype does not maintain vendor menus/catalogues.
-
-Therefore we intentionally avoid prematurely building:
-
-```text
-products
-menu_categories
-menu_variants
-merchant_inventory
-```
-
-A required field such as:
-
-```text
-requested_items_text =
-"2 Pav Bhaji, extra butter, no onion"
-```
-
-matches the actual product requirement and reduces schema/UI complexity.
-
-If RouteBite later introduces merchant catalogues, structured line items can be added without changing the pickup-location thesis.
-
----
-
-# 14. `matching_runs`
-
-Purpose:
-
-> Represent one complete attempt to find a partner for an order.
-
-This makes matching and rematching debuggable.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-order_id UUID NOT NULL
-run_number INTEGER NOT NULL
-status MATCHING_RUN_STATUS NOT NULL
-started_at TIMESTAMPTZ NOT NULL
-completed_at TIMESTAMPTZ NULL
-candidate_count INTEGER NOT NULL DEFAULT 0
-offer_count INTEGER NOT NULL DEFAULT 0
-failure_reason TEXT NULL
-created_at TIMESTAMPTZ NOT NULL
-```
-
-Recommended enum:
-
-```text
-SEARCHING
-SUCCEEDED
-FAILED
-CANCELLED
-```
-
-Constraint:
-
-```text
-UNIQUE(order_id, run_number)
-```
-
-Example:
-
-```text
-run 1 = initial matching
-run 2 = rematching after partner cancellation
-```
-
-This is preferable to overwriting old matching information and losing why the first attempt failed.
-
----
-
-# 15. `delivery_offers`
-
-Purpose:
-
-> Persist offers sent to individual partners during matching.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-matching_run_id UUID NOT NULL
-order_id UUID NOT NULL
-partner_id UUID NOT NULL
-trip_id UUID NULL
-status OFFER_STATUS NOT NULL
-batch_number INTEGER NOT NULL
-rank_position INTEGER NOT NULL
-predicted_pickup_at TIMESTAMPTZ NULL
-predicted_delivery_at TIMESTAMPTZ NULL
-pickup_travel_seconds INTEGER NULL
-additional_detour_seconds INTEGER NULL
-additional_detour_meters INTEGER NULL
-offered_partner_earning_paise INTEGER NOT NULL
-expires_at TIMESTAMPTZ NOT NULL
-responded_at TIMESTAMPTZ NULL
-created_at TIMESTAMPTZ NOT NULL
-```
-
-Recommended enum:
-
-```text
-PENDING
-ACCEPTED
-REJECTED
-EXPIRED
-CANCELLED
-```
-
-Recommended constraint:
-
-```text
-UNIQUE(matching_run_id, partner_id)
-```
-
-This prevents accidental duplicate offers to the same partner during one matching run.
-
-## Important timer rule
-
-`expires_at` is durable truth.
-
-The worker may use a background job to wake up near that time, but the offer does not remain valid simply because a timer/job was lost.
-
-Any acceptance checks:
-
-```text
-now < expires_at
-AND status = PENDING
-```
-
-before proceeding.
-
----
-
-# 16. `order_assignments`
-
-Purpose:
-
-> Represent which partner currently owns an order while preserving reassignment history.
-
-This table is central to preventing two major bugs:
-
-1. two partners getting the same order,
-2. one partner getting two simultaneous active orders.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-order_id UUID NOT NULL
-partner_id UUID NOT NULL
-trip_id UUID NULL
-source_offer_id UUID NULL
-status ASSIGNMENT_STATUS NOT NULL
-assigned_at TIMESTAMPTZ NOT NULL
-ended_at TIMESTAMPTZ NULL
-end_reason TEXT NULL
-created_at TIMESTAMPTZ NOT NULL
-updated_at TIMESTAMPTZ NOT NULL
-```
-
-Recommended enum:
-
-```text
-ACTIVE
-ENDED
-CANCELLED
-```
-
-## 16.1 Critical partial unique indexes
-
-PostgreSQL should enforce:
-
-```sql
-CREATE UNIQUE INDEX ux_order_one_active_assignment
-ON order_assignments(order_id)
-WHERE status = 'ACTIVE';
-```
-
-and:
-
-```sql
-CREATE UNIQUE INDEX ux_partner_one_active_assignment
-ON order_assignments(partner_id)
-WHERE status = 'ACTIVE';
-```
-
-These are extremely important.
-
-They guarantee at the database layer:
-
-```text
-one active partner per order
-AND
-one active order per partner
-```
-
-even if two requests race at exactly the same time.
-
-Prisma may require these partial indexes to be added through a custom/raw SQL migration because they are PostgreSQL-specific.
-
-That is acceptable and preferable to relying only on application memory.
-
----
-
-# 17. Atomic Partner Acceptance Transaction
-
-When a partner presses **Accept**, do not perform independent database writes such as:
-
-```text
-1. update offer
-2. later update order
-3. later create assignment
-```
-
-because a crash between them creates inconsistent state.
-
-Instead use one database transaction.
-
-Conceptually:
-
-```text
-BEGIN
-
-1. verify offer belongs to partner
-2. verify offer = PENDING
-3. verify offer has not expired
-4. verify order = MATCHING
-5. insert ACTIVE order_assignment
-   - unique indexes protect order and partner
-6. update offer → ACCEPTED
-7. update order → ASSIGNED
-8. cancel other PENDING offers for this order/run
-9. update matching_run → SUCCEEDED
-10. update partner_presence → BUSY
-11. append order_event
-
-COMMIT
-```
-
-If another partner already won, the unique constraint/conditional state check causes the transaction to fail safely.
-
-The losing request returns:
-
-```text
-ORDER_ALREADY_ASSIGNED
-```
-
-No partial assignment should survive.
-
----
-
-# 18. `payment_attempts`
-
-Purpose:
-
-> Store each customer checkout attempt separately from order logistics.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-order_id UUID NOT NULL
-attempt_number INTEGER NOT NULL
-provider PAYMENT_PROVIDER NOT NULL
-mode PAYMENT_MODE NOT NULL
-status PAYMENT_STATUS NOT NULL
-currency CHAR(3) NOT NULL DEFAULT 'INR'
-amount_paise INTEGER NOT NULL
-provider_order_id VARCHAR(200) NULL
-provider_payment_id VARCHAR(200) NULL
-idempotency_key VARCHAR(200) NOT NULL
-failure_code VARCHAR(120) NULL
-failure_message TEXT NULL
-created_at TIMESTAMPTZ NOT NULL
-confirmed_at TIMESTAMPTZ NULL
-failed_at TIMESTAMPTZ NULL
-updated_at TIMESTAMPTZ NOT NULL
-```
-
-Enums:
-
-```text
-PAYMENT_PROVIDER:
-RAZORPAY
-
-PAYMENT_MODE:
-TEST
-LIVE
-
-PAYMENT_STATUS:
-CREATED
-PAYMENT_PENDING
-PAYMENT_CONFIRMED
-PAYMENT_FAILED
-DEMO_REFUND_PENDING
-DEMO_REFUNDED
-DEMO_SETTLEMENT_PENDING
-DEMO_SETTLED
-```
-
-Prototype uses:
-
-```text
-provider = RAZORPAY
-mode = TEST
-```
-
-Constraints:
-
-```text
-UNIQUE(order_id, attempt_number)
-UNIQUE(idempotency_key)
-UNIQUE(provider_order_id) when not null
-UNIQUE(provider_payment_id) when not null
-amount_paise >= 0
-```
-
-## Important rule
-
-The frontend never makes payment authoritative by writing this table directly.
-
-The backend verifies provider information and performs the state transition.
-
----
-
-# 19. `payment_webhook_events`
-
-Purpose:
-
-> Make external provider callbacks idempotent and auditable.
-
-Payment providers may retry the same webhook.
-
-Without protection this could accidentally:
-
-```text
-confirm payment twice
-create duplicate ledger entries
-trigger matching twice
-```
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-provider PAYMENT_PROVIDER NOT NULL
-provider_event_id VARCHAR(250) NOT NULL
-event_type VARCHAR(160) NOT NULL
-processing_status WEBHOOK_PROCESSING_STATUS NOT NULL
-payload JSONB NULL
-received_at TIMESTAMPTZ NOT NULL
-processed_at TIMESTAMPTZ NULL
-error_message TEXT NULL
-```
-
-Enum:
-
-```text
-RECEIVED
-PROCESSED
-FAILED
-IGNORED
-```
-
-Critical constraint:
-
-```text
-UNIQUE(provider, provider_event_id)
-```
-
-Processing pattern:
-
-```text
-receive webhook
-      ↓
-verify signature
-      ↓
-insert provider_event_id
-      ↓
-unique violation?
-  ├─ yes → already processed/seen; return safe success
-  └─ no  → process transactionally
-```
-
-Do not store secrets inside webhook payload metadata.
-
----
-
-# 20. Payment Confirmation Transaction
-
-Payment confirmation is another critical transaction.
-
-Conceptually:
-
-```text
-BEGIN
-
-1. lock/read payment attempt
-2. verify it is not already confirmed
-3. mark payment_attempt = PAYMENT_CONFIRMED
-4. ensure order is still PAYMENT_PENDING
-5. transition order → MATCHING
-6. create matching_run #1 if not already present
-7. append order_event
-
-COMMIT
-```
-
-If the callback/API request repeats, unique/idempotent checks should return the already-confirmed result instead of creating another matching run.
-
----
-
-# 21. `demo_ledger_entries`
-
-Purpose:
-
-> Record the prototype's conceptual money movement without pretending that real banking settlement occurred.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-order_id UUID NOT NULL
-payment_attempt_id UUID NULL
-entry_type LEDGER_ENTRY_TYPE NOT NULL
-amount_paise INTEGER NOT NULL
-reference_key VARCHAR(160) NOT NULL
-note TEXT NULL
-created_at TIMESTAMPTZ NOT NULL
-```
-
-Recommended entry types:
-
-```text
-CUSTOMER_TEST_PAYMENT
-FOOD_PRICE_INCREASE
-FOOD_PRICE_DECREASE
-FOOD_REIMBURSEMENT
-PARTNER_BASE_EARNING
-PARTNER_INCENTIVE
-PLATFORM_FEE
-PLATFORM_SUBSIDY
-DEMO_REFUND
-```
-
-Constraints:
-
-```text
-amount_paise >= 0
-UNIQUE(order_id, entry_type, reference_key)
-```
-
-`reference_key` makes repeated processing safe.
-
-Example:
-
-```text
-order-123 | PARTNER_BASE_EARNING | delivery-completion
-```
-
-cannot be inserted twice.
-
-Ledger entries are append-only for normal application behavior.
-
-Corrections should create compensating entries rather than silently rewriting historical financial events.
-
----
-
-# 22. `partner_earnings`
-
-Purpose:
-
-> Provide one authoritative earning record per successfully completed order for the partner dashboard.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-order_id UUID NOT NULL UNIQUE
-partner_id UUID NOT NULL
-base_earning_paise INTEGER NOT NULL
-incentive_paise INTEGER NOT NULL DEFAULT 0
-total_earning_paise INTEGER NOT NULL
-status PARTNER_EARNING_STATUS NOT NULL
-confirmed_at TIMESTAMPTZ NULL
-demo_settled_at TIMESTAMPTZ NULL
-created_at TIMESTAMPTZ NOT NULL
-updated_at TIMESTAMPTZ NOT NULL
-```
-
-Enum:
-
-```text
-PENDING
-CONFIRMED
-DEMO_SETTLED
-REVERSED
-```
-
-Critical constraint:
-
-```text
-UNIQUE(order_id)
-```
-
-This prevents the same delivered order from generating two partner earnings if completion logic is retried.
-
----
-
-# 23. Delivery Completion Transaction
-
-Successful OTP verification and completion should use a transaction similar to:
-
-```text
-BEGIN
-
-1. validate OTP
-2. mark OTP verified
-3. transition order to DELIVERED/COMPLETED
-4. end ACTIVE assignment
-5. create partner_earning if absent
-6. create required demo_ledger_entries if absent
-7. update payment/demo settlement state
-8. update partner_presence from BUSY to chosen post-order state
-9. append order_event
-
-COMMIT
-```
-
-Because `partner_earnings.order_id` is unique, a retry cannot create a second earning.
-
-Because ledger entries have unique reference keys, repeated completion cannot double-book them.
-
----
-
-# 24. `delivery_otps`
-
-Purpose:
-
-> Securely represent the OTP required for delivery handoff.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-order_id UUID NOT NULL UNIQUE
-code_hash VARCHAR(255) NOT NULL
-expires_at TIMESTAMPTZ NOT NULL
-attempt_count INTEGER NOT NULL DEFAULT 0
-max_attempts INTEGER NOT NULL
-verified_at TIMESTAMPTZ NULL
-created_at TIMESTAMPTZ NOT NULL
-updated_at TIMESTAMPTZ NOT NULL
-```
-
-## Security rules
-
-Never store:
-
-```text
-plain OTP
-```
-
-Store only a one-way hash suitable for short secret verification, combined with rate/attempt limits.
-
-Verification requires:
-
-```text
-verified_at IS NULL
-AND now < expires_at
-AND attempt_count < max_attempts
-```
-
-After successful verification:
-
-```text
-verified_at = now
-```
-
-A verified OTP cannot be reused.
-
----
-
-# 25. `ratings`
-
-Purpose:
-
-> Store customer rating of the partner after a completed order.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-order_id UUID NOT NULL UNIQUE
-customer_id UUID NOT NULL
-partner_id UUID NOT NULL
-score SMALLINT NOT NULL
-comment TEXT NULL
-created_at TIMESTAMPTZ NOT NULL
-```
-
-Constraints:
-
-```text
-1 <= score <= 5
-UNIQUE(order_id)
-```
-
-The backend must verify:
-
-```text
-order.customer_id == rating.customer_id
-order was completed
-partner was the completed assignment partner
-```
-
-before inserting.
-
----
-
-# 26. `admin_cases`
-
-Purpose:
-
-> Handle prototype situations that intentionally require manual intervention.
-
-Examples:
-
-```text
-partner failure after purchase
-price disagreement
-failed delivery
-post-pickup cancellation request
-receipt dispute
-```
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-order_id UUID NOT NULL
-case_type ADMIN_CASE_TYPE NOT NULL
-status ADMIN_CASE_STATUS NOT NULL
-opened_by_user_id UUID NULL
-reason TEXT NOT NULL
-resolution_note TEXT NULL
-resolved_by_user_id UUID NULL
-created_at TIMESTAMPTZ NOT NULL
-resolved_at TIMESTAMPTZ NULL
-updated_at TIMESTAMPTZ NOT NULL
-```
-
-Enums can initially include:
-
-```text
-ADMIN_CASE_TYPE:
-PRICE_DISPUTE
-PARTNER_FAILURE_AFTER_PURCHASE
-DELIVERY_FAILURE
-CANCELLATION_AFTER_PICKUP
-OTHER
-
-ADMIN_CASE_STATUS:
-OPEN
-RESOLVED
-CANCELLED
-```
-
-This avoids inventing automatic financial/legal outcomes where the prototype intentionally uses human review.
-
----
-
-# 27. `order_events`
-
-Purpose:
-
-> Immutable operational/audit history for debugging an order.
-
-The current order state still lives in `orders.status`.
-
-`order_events` explains **how it got there**.
-
-Recommended fields:
-
-```text
-id UUID PRIMARY KEY
-order_id UUID NOT NULL
-event_type VARCHAR(120) NOT NULL
-from_status ORDER_STATUS NULL
-to_status ORDER_STATUS NULL
-actor_type ACTOR_TYPE NOT NULL
-actor_user_id UUID NULL
-metadata JSONB NULL
-created_at TIMESTAMPTZ NOT NULL
-```
-
-Recommended actor types:
-
-```text
-CUSTOMER
-PARTNER
-ADMIN
-SYSTEM
-PAYMENT_PROVIDER
-WORKER
-```
-
-Example events:
 
 ```text
 ORDER_CREATED
 PAYMENT_CONFIRMED
 MATCHING_STARTED
-OFFER_SENT
 PARTNER_ASSIGNED
 PRICE_CONFIRMATION_REQUESTED
-PRICE_APPROVED
-FOOD_PICKED_UP
+PICKED_UP
+OUT_FOR_DELIVERY
 OTP_VERIFIED
 ORDER_COMPLETED
-ORDER_CANCELLED
 ```
 
-## Important rule
+The timeline improves debugging and admin support.
 
-`order_events` is append-only audit data.
-
-Do not reconstruct the current order status by replaying events in the prototype.
-
-We are **not implementing event sourcing**.
-
-The authoritative current state remains `orders.status`.
+Do not store secrets or sensitive payloads in timeline metadata.
 
 ---
 
-# 28. Source-of-Truth Matrix
+# 14. Offer Collection
 
-To reduce bugs, each concept must have one clear authoritative location.
+Offers require their own collection because they are queried by partner/status/expiry.
 
-| Concept | Source of truth |
-|---|---|
-| Authenticated identity | Supabase Auth |
-| Product user profile | `users` |
-| Partner verification | `partner_profiles.verification_status` |
-| Current online/location state | `partner_presence` |
-| Scheduled/on-my-way trip | `trips` |
-| Current order state | `orders.status` |
-| Current active assignment | `order_assignments` where `status = ACTIVE` |
-| Offer validity | `delivery_offers.status + expires_at` |
-| Payment attempt state | `payment_attempts.status` |
-| Provider webhook deduplication | `payment_webhook_events` unique provider event ID |
-| Final order financial snapshot | amount fields on `orders` |
-| Demo financial history | `demo_ledger_entries` |
-| Partner earning settlement demo | `partner_earnings` |
-| Delivery verification | `delivery_otps` |
-| Order history/debug audit | `order_events` |
-| Uploaded file bytes | Supabase Storage |
-| Uploaded file metadata | `uploaded_files` |
+Conceptual document:
 
-When code needs to know something, it should read the appropriate source instead of inventing a second copy.
+```js
+{
+  _id,
+  orderId,
+  partnerId,
+  tripId,
+
+  matchingRound,
+  rankPosition,
+
+  status:
+    "PENDING" |
+    "ACCEPTED" |
+    "REJECTED" |
+    "EXPIRED" |
+    "CANCELLED",
+
+  expiresAt,
+
+  candidateSnapshot: {
+    predictedPickupAt,
+    predictedDeliveryAt,
+    pickupTravelMinutes,
+    additionalDetourMinutes,
+    additionalDetourKm,
+    expectedEarningPaise
+  },
+
+  respondedAt,
+  createdAt,
+  updatedAt
+}
+```
 
 ---
 
-# 29. Foreign-Key Strategy
+# 15. Offer Indexes
 
-Use foreign keys for RouteBite-owned relational data.
-
-Examples:
+Recommended:
 
 ```text
-partner_profiles.user_id → users.id
-trips.partner_id → partner_profiles.id (or canonical partner identifier)
-orders.customer_id → users.id
-matching_runs.order_id → orders.id
-delivery_offers.order_id → orders.id
-order_assignments.order_id → orders.id
-payment_attempts.order_id → orders.id
-ratings.order_id → orders.id
+partnerId + status + expiresAt
+orderId + status
+status + expiresAt
 ```
 
-## Deletion policy
-
-For durable business/financial entities prefer:
+Unique compound index:
 
 ```text
-ON DELETE RESTRICT
+orderId + partnerId + matchingRound
 ```
 
-rather than broad cascading deletes.
-
-An accidental user deletion should not silently erase:
-
-```text
-orders
-payments
-assignment history
-financial records
-```
-
-For the prototype, users/orders with business history should normally be deactivated/status-managed rather than physically deleted.
+This prevents accidental duplicate offers to the same partner within one round.
 
 ---
 
-# 30. Index Strategy
+# 16. Offer Acceptance Condition
 
-Indexes should support actual product queries, not be added randomly.
-
-Recommended starting indexes:
-
-## Users/partners
+An offer can be accepted only when:
 
 ```text
-partner_profiles(verification_status)
-partner_presence(availability_status, last_location_at)
+offer.status == PENDING
+AND offer.expiresAt > now
+AND order.status == MATCHING
+AND order.assignedPartnerId == null
+AND partner.activeOrderId == null
+AND partner.verificationStatus == APPROVED
 ```
 
-For coarse location discovery:
+Do not perform these as independent read-then-write operations.
 
-```text
-partner_presence(current_latitude, current_longitude)
-```
-
-At campus scale this is sufficient alongside application-level bounding-box filtering.
-
-## Trips
-
-```text
-trips(partner_id, status)
-trips(status, scheduled_departure_at)
-```
-
-## Orders
-
-```text
-orders(customer_id, created_at DESC)
-orders(status, created_at)
-```
-
-## Matching
-
-```text
-matching_runs(order_id, run_number)
-delivery_offers(order_id, status)
-delivery_offers(partner_id, status, expires_at)
-delivery_offers(status, expires_at)
-```
-
-## Assignments
-
-```text
-order_assignments(order_id, status)
-order_assignments(partner_id, status)
-```
-
-plus the critical partial unique indexes for ACTIVE assignments.
-
-## Payments
-
-```text
-payment_attempts(order_id, created_at DESC)
-payment_attempts(provider_payment_id)
-payment_webhook_events(provider, provider_event_id)
-```
-
-## Audit/admin
-
-```text
-order_events(order_id, created_at)
-admin_cases(status, created_at)
-partner_earnings(partner_id, created_at DESC)
-```
-
-Indexes should be measured later; do not create dozens of speculative indexes because every index also increases write/storage cost.
+Use a MongoDB transaction with conditional updates.
 
 ---
 
-# 31. Order State Transition Safety
+# 17. Atomic Partner Assignment Transaction
 
-The database stores the current status, but allowed transitions belong in one centralized backend state-machine/domain service.
-
-Do not allow arbitrary code to execute:
+Conceptual algorithm:
 
 ```text
-order.status = anything
+start session + transaction
+
+1. find/update offer
+   condition:
+     PENDING
+     expiresAt > now
+   set:
+     ACCEPTED
+
+2. find/update partner
+   condition:
+     APPROVED
+     activeOrderId == null
+   set:
+     activeOrderId = orderId
+     availabilityStatus = OFFLINE
+
+3. find/update order
+   condition:
+     status == MATCHING
+     assignedPartnerId == null
+   set:
+     assignedPartnerId = partnerId
+     status = ASSIGNED
+
+4. update competing PENDING offers for order → CANCELLED
+
+commit
 ```
 
-Examples of valid conceptual transitions:
+If any required update matches zero documents, abort.
 
-```text
-DRAFT
-→ PAYMENT_PENDING
-
-PAYMENT_PENDING
-→ MATCHING
-
-MATCHING
-→ ASSIGNED
-or MATCHING_FAILED
-
-ASSIGNED
-→ PARTNER_TO_PICKUP
-
-PARTNER_TO_PICKUP
-→ PRICE_CONFIRMATION_REQUIRED
-or PICKED_UP
-
-PRICE_CONFIRMATION_REQUIRED
-→ PICKED_UP
-or CANCELLED
-or ADMIN_REVIEW_REQUIRED
-
-PICKED_UP
-→ OUT_FOR_DELIVERY
-
-OUT_FOR_DELIVERY
-→ DELIVERY_OTP_REQUIRED
-
-DELIVERY_OTP_REQUIRED
-→ DELIVERED
-
-DELIVERED
-→ COMPLETED
-```
-
-Failure/admin paths are handled explicitly.
-
-## Conditional updates
-
-Important transitions should include the expected current state in the database update.
-
-Example concept:
-
-```sql
-UPDATE orders
-SET status = 'ASSIGNED', version = version + 1
-WHERE id = :order_id
-  AND status = 'MATCHING';
-```
-
-If affected rows = 0, another operation changed the order and this request must re-read state rather than overwrite it.
+This is the primary protection against double assignment.
 
 ---
 
-# 32. Optimistic Version Field
+# 18. Payment Collection
 
-`orders.version` exists to help detect stale writes.
+Payment state is separate from order state.
 
-Typical concept:
+Conceptual payment document:
 
-```text
-client/service reads version = 7
+```js
+{
+  _id,
+  orderId,
+  userId,
 
-update expects version = 7
+  provider: "RAZORPAY",
+  mode: "TEST",
 
-successful update:
-version becomes 8
+  providerOrderId,
+  providerPaymentId,
+
+  status:
+    "CREATED" |
+    "PAYMENT_PENDING" |
+    "PAYMENT_CONFIRMED" |
+    "PAYMENT_FAILED" |
+    "DEMO_REFUND_PENDING" |
+    "DEMO_REFUNDED" |
+    "DEMO_SETTLEMENT_PENDING" |
+    "DEMO_SETTLED",
+
+  amountPaise,
+  currency: "INR",
+
+  confirmedAt,
+  failedAt,
+  createdAt,
+  updatedAt
+}
 ```
-
-If version is already 8, the stale operation must not blindly overwrite newer state.
-
-Not every simple query needs optimistic locking, but it is useful for high-risk operations such as:
-
-- cancellation vs acceptance,
-- price approval vs timeout,
-- admin action vs partner action.
-
-Database transactions/unique constraints remain the main protection for assignment/payment races.
 
 ---
 
-# 33. Cancellation vs Partner Acceptance Race
+# 19. Payment Indexes
 
-Possible race:
-
-```text
-Customer presses Cancel
-at almost the same instant
-Partner presses Accept
-```
-
-Both operations must not succeed independently.
-
-The solution is conditional state + transaction logic.
-
-Acceptance requires:
+Recommended:
 
 ```text
-order.status = MATCHING
+orderId
+providerOrderId unique when present
+providerPaymentId unique sparse when present
+status + createdAt
 ```
 
-Cancellation also requires an allowed cancellable state.
-
-Whichever transaction successfully changes/locks the authoritative state first wins.
-
-The second operation re-reads the order and returns the correct outcome.
-
-Do not solve this using frontend button disabling alone.
+Provider IDs must not be reused across logical successful payment records.
 
 ---
 
-# 34. Price Confirmation Timer
+# 20. Webhook Event Collection
 
-Do not rely on:
+External providers may send the same webhook multiple times.
 
-```text
-setTimeout(...3 minutes...)
+Conceptual document:
+
+```js
+{
+  _id,
+  provider,
+  providerEventId,
+  eventType,
+  receivedAt,
+  processedAt,
+  processingStatus,
+  relatedOrderId
+}
 ```
 
-inside one Node.js process as the source of truth.
+Unique index:
+
+```text
+provider + providerEventId
+```
+
+Processing pattern:
+
+```text
+insert event identity
+        ↓
+duplicate key?
+        ↓
+yes → already processed/being processed; safe no-op
+```
+
+This is mandatory idempotency protection.
+
+---
+
+# 21. Ledger Entry Collection
+
+Conceptual document:
+
+```js
+{
+  _id,
+  orderId,
+  partnerId,
+  userId,
+
+  type:
+    "CUSTOMER_TEST_PAYMENT" |
+    "FOOD_PRICE_ADJUSTMENT" |
+    "DEMO_REFUND" |
+    "FOOD_REIMBURSEMENT" |
+    "PARTNER_EARNING" |
+    "PLATFORM_FEE" |
+    "PLATFORM_SUBSIDY",
+
+  amountPaise,
+  direction: "CREDIT" | "DEBIT",
+
+  idempotencyKey,
+  createdAt
+}
+```
+
+Unique index:
+
+```text
+idempotencyKey unique
+```
+
+Example:
+
+```text
+partner-earning:{orderId}
+```
+
+This prevents duplicate earning creation if order completion is retried.
+
+---
+
+# 22. Completion Transaction
+
+Successful completion may require:
+
+```text
+order → COMPLETED
+partner.activeOrderId → null
+partner.completedOrderCount +1
+ledger PARTNER_EARNING inserted
+payment/demo settlement state updated
+```
+
+These related effects should happen in one MongoDB transaction where practical.
+
+Use a unique ledger idempotency key as a second safety layer.
+
+---
+
+# 23. Cancellation Transaction
+
+When an assigned order is cancelled before purchase:
+
+```text
+order → CANCELLED
+partner.activeOrderId → null
+pending offers → CANCELLED
+payment → DEMO_REFUND_PENDING/DEMO_REFUNDED
+```
+
+The order and partner release should be transactionally consistent.
+
+---
+
+# 24. Partner Cancellation Before Purchase
+
+If partner cancels before purchase:
+
+```text
+transaction:
+partner.activeOrderId → null
+order.assignedPartnerId → null
+order.status → MATCHING
+assignment-related offer state updated
+```
+
+Then matching is restarted after commit.
+
+Do not perform external Google Maps calls inside the database transaction.
+
+---
+
+# 25. Transaction Rule
+
+Transactions should be short.
+
+Inside a transaction:
+
+```text
+MongoDB reads/writes only
+```
+
+Do not wait for:
+
+```text
+Google Maps
+Razorpay
+Cloudinary
+SMS
+Socket.IO client acknowledgement
+```
+
+External calls can be slow and unreliable.
+
+Persist the business result, commit, then notify/call downstream where appropriate.
+
+---
+
+# 26. Price Confirmation Data
+
+Price confirmation deadline must be persisted:
+
+```text
+priceAdjustment.status
+priceAdjustment.expiresAt
+```
+
+Customer approval API must require:
+
+```text
+status == PENDING_CUSTOMER_APPROVAL
+expiresAt > now
+```
+
+A periodic job may mark old requests as `TIMED_OUT`, but the approval query itself prevents late approval.
+
+---
+
+# 27. Delivery OTP
+
+Never store raw delivery OTP.
 
 Store:
 
 ```text
-price_confirmation_expires_at
+otpHash
+expiresAt
+attempts
+verifiedAt
 ```
 
-on the order.
-
-The worker schedules/checks the deadline.
-
-If the server restarts, it can query:
+Verification checks:
 
 ```text
-price_adjustment_status = PENDING_CUSTOMER_APPROVAL
-AND price_confirmation_expires_at <= now
+order is in allowed delivery state
+OTP not already verified
+expiresAt > now
+attempts below limit
+hash matches
 ```
 
-and safely apply timeout behavior.
-
-The same principle applies to offer expiry.
+Successful verification should atomically mark `verifiedAt` so the same code cannot be reused.
 
 ---
 
-# 35. Background Jobs (`pg-boss`)
+# 28. Phone Verification OTP
 
-`pg-boss` uses PostgreSQL for durable background jobs.
+Use the same principles for phone verification:
 
-Possible RouteBite jobs:
+- secure random code,
+- hashed storage,
+- expiry,
+- attempt limit,
+- one-time success.
 
-```text
-expire delivery offer
-continue next matching batch
-price confirmation timeout
-matching timeout/failure
-scheduled matching work
-reconciliation/recovery checks
+Do not store OTP history indefinitely.
+
+---
+
+# 29. Geospatial Partner Discovery
+
+Partner document uses:
+
+```js
+currentLocation: {
+  type: "Point",
+  coordinates: [lng, lat]
+}
 ```
 
-## Important rule
+`2dsphere` index enables coarse discovery.
 
-A background job is a **wake-up mechanism**, not the business source of truth.
+Example query logic:
+
+```text
+APPROVED
+AVAILABLE_NOW
+locationUpdatedAt fresh
+within initial search distance
+```
+
+Then Google Maps determines road ETA and final eligibility.
+
+---
+
+# 30. Stale Location Protection
+
+Do not match a partner based on an old location.
+
+Persist:
+
+```text
+locationUpdatedAt
+```
+
+Eligibility service compares it to:
+
+```text
+MAX_LOCATION_AGE_SECONDS
+```
+
+If stale, exclude or request refresh.
+
+---
+
+# 31. Scheduled Trip Candidate Data
+
+Trips should retain routing metadata needed to avoid unnecessary recalculation:
+
+```text
+routePolyline
+routeDistanceMeters
+routeDurationSeconds
+```
+
+However, traffic-sensitive ETA may need recalculation through Google Maps when actually matching.
+
+Do not treat an old route duration as permanent truth.
+
+---
+
+# 32. Mongoose Enum Validation
+
+State fields must use allowed-value lists.
 
 Example:
 
-```text
-job says "expire offer 123"
+```js
+status: {
+  type: String,
+  enum: ORDER_STATUSES,
+  required: true
+}
 ```
 
-worker must still check:
+Keep shared backend constants such as:
 
 ```text
-offer exists
-status = PENDING
-expires_at <= now
+ORDER_STATUSES
+OFFER_STATUSES
+TRIP_STATUSES
+PAYMENT_STATUSES
+PARTNER_VERIFICATION_STATUSES
 ```
 
-before changing it.
-
-This makes repeated/delayed jobs safe.
-
-Do not manually modify pg-boss internal tables from RouteBite business code.
+Do not scatter manually typed strings across the codebase.
 
 ---
 
-# 36. Reconciliation Queries
+# 33. Database Validation vs Business Validation
 
-For a lower-bug prototype, the worker should periodically repair/check states that may have been interrupted by process crashes.
+Mongoose ensures document shape.
+
+Services enforce cross-field/business meaning.
+
+Example:
+
+Mongoose can ensure:
+
+```text
+status is a valid string
+amount is nonnegative
+```
+
+Service must ensure:
+
+```text
+PICKED_UP cannot happen before assignment
+COMPLETED requires verified delivery OTP
+MATCHING requires confirmed test payment
+```
+
+Both layers are required.
+
+---
+
+# 34. Optimistic/Conditional Writes
+
+Avoid this for critical state:
+
+```js
+const order = await Order.findById(id);
+order.status = "ASSIGNED";
+await order.save();
+```
+
+Prefer:
+
+```text
+findOneAndUpdate with expected current state
+```
+
+For example:
+
+```text
+_id = orderId
+status = MATCHING
+assignedPartnerId = null
+```
+
+This prevents stale code from overwriting a newer state.
+
+---
+
+# 35. Mongoose Versioning
+
+Mongoose's `__v` may be kept for optimistic concurrency where useful.
+
+However, do not rely only on `__v` for the assignment/payment invariants.
+
+Critical paths should have explicit query conditions and transactions.
+
+---
+
+# 36. Background Expiry Queries
+
+Jobs may query:
+
+```text
+offers:
+status = PENDING
+expiresAt <= now
+
+orders:
+priceAdjustment.status = PENDING_CUSTOMER_APPROVAL
+priceAdjustment.expiresAt <= now
+
+partners:
+availabilityStatus = AVAILABLE_NOW
+locationUpdatedAt too old
+```
+
+Jobs must update conditionally so rerunning them is safe.
+
+---
+
+# 37. Do Not Use TTL Indexes for Business History
+
+MongoDB TTL indexes physically delete documents and run asynchronously.
+
+Do not use TTL deletion for:
+
+```text
+offers
+payments
+orders
+ledger entries
+```
+
+We need those records for debugging/audit.
+
+Expiry should normally change a status rather than delete the record.
+
+---
+
+# 38. Cloudinary File References
+
+MongoDB stores references, not image bytes.
 
 Examples:
 
 ```text
-PENDING offers whose expires_at is in the past
-
-PENDING price confirmations whose deadline passed
-
-MATCHING orders with no active matching run
-
-ASSIGNED orders with no ACTIVE assignment
-
-ACTIVE assignments whose orders are terminal
-
-COMPLETED orders missing partner_earnings
+profilePhoto.publicId
+collegeIdentity.documentPublicId
+order.receipt.cloudinaryPublicId
 ```
 
-The reconciliation job should be conservative and idempotent.
+Sensitive documents must not store a permanently public URL.
 
-It should log/raise admin review rather than guessing when the correct outcome is ambiguous.
+Access should be authorized by backend logic.
 
 ---
 
-# 37. Direct Database Access Rule
+# 39. Data Minimization
 
-Application clients must not perform unrestricted direct writes to business tables.
+Do not collect unnecessary identity data.
 
-Preferred flow:
+For the campus prototype, do not store full Aadhaar documents/numbers.
 
-```text
-React client
-    ↓
-NestJS API
-    ↓
-Authorization + validation + domain rules
-    ↓
-Prisma/PostgreSQL
-```
-
-Why?
-
-If the frontend could directly write:
-
-```text
-order.status = COMPLETED
-partner.verification_status = APPROVED
-payment.status = PAYMENT_CONFIRMED
-```
-
-most backend invariants become meaningless.
-
-Supabase may still be used directly by the frontend for carefully scoped authentication behavior, but RouteBite business state changes remain backend-controlled.
+Only store the college/profile information required by the approved product flow.
 
 ---
 
-# 38. Row-Level Security / Supabase Safety
+# 40. Delete Behavior
 
-Because Supabase exposes APIs around PostgreSQL, application tables should not accidentally become publicly readable/writable.
-
-Recommended prototype posture:
-
-- enable RLS on RouteBite public tables where exposed through Supabase APIs,
-- define no broad anonymous mutation policies,
-- backend database/service access performs trusted operations,
-- frontend business data normally comes from NestJS APIs,
-- Storage buckets containing IDs/receipts remain private.
-
-The exact Supabase policy SQL can be implemented during scaffold/security work.
-
----
-
-# 39. Transaction Boundaries
-
-Use a transaction when multiple writes together represent **one business fact**.
-
-Critical transaction examples:
-
-```text
-Payment confirmation
-Partner offer acceptance/assignment
-Customer cancellation with assignment release
-Partner cancellation/rematching transition
-Price approval + final amount update
-OTP verification + order completion + earning creation
-Admin resolution that changes order/financial state
-```
-
-Do not put slow external network calls inside database transactions when avoidable.
-
-Bad:
-
-```text
-BEGIN
-call Google Maps for 3 seconds
-call Razorpay
-update database
-COMMIT
-```
-
-Better:
-
-```text
-call external provider
-validate response
-
-BEGIN
-persist resulting business transition quickly
-COMMIT
-```
-
-Transactions should be short to reduce lock contention/deadlocks.
-
----
-
-# 40. External Provider Data
-
-Do not let Google/Razorpay response JSON become the only representation of important business information.
-
-Example:
-
-Google may return a route object.
-
-RouteBite should extract/store the values it actually needs:
-
-```text
-route duration
-route distance
-encoded polyline
-predicted pickup/delivery timestamps
-```
-
-Provider metadata can additionally be stored in limited JSONB when useful for debugging, but core fields remain explicit/typed.
-
-Likewise payment provider IDs should have their own indexed columns.
-
----
-
-# 41. JSONB Usage Rule
-
-JSONB is allowed for:
-
-```text
-audit metadata
-provider webhook payload snapshot
-non-critical matching debug metadata
-```
-
-JSONB should **not** replace typed columns for core fields such as:
-
-```text
-order status
-customer ID
-partner ID
-money
-payment status
-pickup coordinates
-assignment
-```
-
-If the application frequently filters/validates a value, it probably deserves a real column.
-
----
-
-# 42. No Generic Soft Delete Everywhere
-
-Do not add:
-
-```text
-deleted_at
-```
-
-to every table by habit.
-
-RouteBite business entities already have explicit lifecycle states.
+Business records should usually not be physically deleted during normal operation.
 
 Examples:
 
 ```text
 order → CANCELLED
 trip → TRIP_CANCELLED
-partner → SUSPENDED
-admin case → RESOLVED
+offer → EXPIRED
+partner application → REJECTED
 ```
 
-Durable transactional history should usually remain stored.
+Keeping records helps debugging and demonstration history.
 
-Physical cleanup may later exist for temporary/upload data according to privacy/retention rules.
+Hard deletion may be implemented later for privacy/account-deletion obligations.
 
 ---
 
-# 43. Data Retention for Location
+# 41. Recommended Index Summary
 
-The prototype should minimize location retention.
+```text
+USERS
+phone UNIQUE
+email UNIQUE partial/sparse
 
-`partner_presence` stores only the latest relevant coordinate.
+PARTNERS
+userId UNIQUE
+currentLocation 2dsphere
+verificationStatus + availabilityStatus
+activeOrderId
 
-When partner stops sharing location:
+TRIPS
+partnerId + status
+status + scheduledDepartureAt
 
-- location does not need to be continually appended to history,
-- the application may clear coordinates after a reasonable inactive period if desired,
-- completed orders keep business timestamps but not full second-by-second movement history.
+ORDERS
+customerId + createdAt
+status + createdAt
+assignedPartnerId + status
+deliveryWindowEnd + status
 
-If historical route evidence becomes necessary later, design a deliberate retention policy rather than silently accumulating GPS data forever.
+OFFERS
+partnerId + status + expiresAt
+orderId + status
+status + expiresAt
+orderId + partnerId + matchingRound UNIQUE
+
+PAYMENTS
+providerOrderId UNIQUE
+providerPaymentId UNIQUE sparse
+orderId
+
+WEBHOOK EVENTS
+provider + providerEventId UNIQUE
+
+LEDGER
+idempotencyKey UNIQUE
+orderId + createdAt
+```
+
+Validate indexes in Atlas after deployment rather than assuming Mongoose auto-index creation will always be enabled in production.
 
 ---
 
-# 44. Migration Strategy
+# 42. Important Concurrency Scenarios
 
-All application schema changes must be versioned in migrations.
+Before considering the database design complete, test these explicitly.
 
-Use Prisma migrations for normal schema evolution.
+## Scenario A — Two partners accept same order
 
-Use reviewed raw SQL inside migrations for PostgreSQL features Prisma cannot fully express, especially:
+Expected:
 
 ```text
-partial unique indexes
-specific CHECK constraints
-special database indexes if later required
+one transaction commits
+one transaction fails/no match
+one assigned partner
 ```
 
-Rules:
+## Scenario B — Same partner accepts two orders
 
-1. never manually edit production/prototype DB schema without migration history,
-2. review generated SQL before applying destructive migrations,
-3. backup important demo data before risky schema changes,
-4. never use `prisma db push` as the uncontrolled deployment strategy once shared environments exist,
-5. seed data separately from schema migrations.
-
----
-
-# 45. Seed Data
-
-A reproducible demo environment should include seed capability.
-
-Seed examples:
+Expected:
 
 ```text
-Admin user profile reference
-Approved test partner A
-Approved test partner B
-Pending partner
-Sample campus coordinates
-Sample scheduled trip
-Optional historical completed order/rating
+only one transaction can set activeOrderId from null
+second fails
 ```
 
-Do not seed real identity documents, real Aadhaar data, or real payment credentials.
+## Scenario C — Offer expires during acceptance
 
-Use clearly synthetic demo data.
-
----
-
-# 46. Database Testing Requirements
-
-The database design is not complete until the dangerous invariants are tested.
-
-Minimum integration tests:
+Expected:
 
 ```text
-[ ] Two partners accept same order concurrently → only one ACTIVE assignment
-
-[ ] One partner accepts two orders concurrently → only one ACTIVE assignment
-
-[ ] Duplicate Razorpay webhook event → processed only once
-
-[ ] Duplicate delivery completion request → only one partner earning
-
-[ ] Duplicate rating submission → only one rating per order
-
-[ ] Expired offer cannot be accepted
-
-[ ] Pending partner cannot receive offer
-
-[ ] Wrong order state cannot transition to PICKED_UP
-
-[ ] Customer cannot cancel completed order
-
-[ ] OTP cannot be reused after verification
-
-[ ] Price timeout survives worker restart/reconciliation
-
-[ ] Offer timeout survives worker restart/reconciliation
-
-[ ] Deleting user cannot accidentally cascade-delete order/payment history
+accept query requires expiresAt > now
+expired offer cannot win
 ```
 
-Concurrency tests should use the real PostgreSQL test database, not only mocks.
+## Scenario D — Razorpay sends duplicate webhook
 
----
-
-# 47. Initial Tables Summary
-
-P0/P1 application tables:
+Expected:
 
 ```text
-users
-uploaded_files
-partner_profiles
-partner_presence
-trips
-orders
-matching_runs
-delivery_offers
-order_assignments
-payment_attempts
-payment_webhook_events
-demo_ledger_entries
-partner_earnings
-delivery_otps
-ratings
-admin_cases
-order_events
+unique provider event ID blocks duplicate processing
 ```
 
-This may look like several tables, but each represents a distinct business responsibility.
+## Scenario E — Complete endpoint retried
 
-They all live inside **one PostgreSQL database** and one modular-monolith application architecture.
-
-We are not creating separate databases/services for each domain.
-
----
-
-# 48. Tables We Deliberately Do Not Need Yet
-
-Do not add until requirements justify them:
+Expected:
 
 ```text
-vendors
-merchant_accounts
-menus
-menu_categories
-inventory
-shopping_cart
-coupons
-subscription plans
-bank_accounts
-real payout accounts
-Aadhaar records
-fraud_scores
-ML feature tables
-multi-order route batches
-city/zone sharding metadata
-Kafka/event-store tables
-chat message infrastructure
+order already completed OR conditional transition fails
+partner earning idempotency key prevents duplicate ledger entry
 ```
 
-This keeps the prototype aligned with the actual product.
+## Scenario F — Customer cancel and partner accept concurrently
 
----
-
-# 49. Recommended Prisma Module Ownership
-
-The backend should not have one giant file directly querying every table.
-
-Suggested domain ownership:
+Expected:
 
 ```text
-Auth/User module
-  users
-
-Partner module
-  partner_profiles
-  partner_presence
-  uploaded_files (partner docs)
-
-Trip module
-  trips
-
-Order module
-  orders
-  order_assignments
-  order_events
-
-Matching module
-  matching_runs
-  delivery_offers
-
-Payment module
-  payment_attempts
-  payment_webhook_events
-  demo_ledger_entries
-  partner_earnings
-
-Delivery module
-  delivery_otps
-
-Rating module
-  ratings
-
-Admin module
-  admin_cases
-```
-
-Modules may use shared repository/database infrastructure, but ownership clarifies which business service is allowed to mutate which state.
-
----
-
-# 50. Implementation Order
-
-Create the schema in an order that allows vertical testing early.
-
-Recommended sequence:
-
-```text
-1. users
-2. uploaded_files
-3. partner_profiles
-4. partner_presence
-5. trips
-6. orders
-7. payment_attempts
-8. matching_runs
-9. delivery_offers
-10. order_assignments
-11. order_events
-12. delivery_otps
-13. demo_ledger_entries
-14. partner_earnings
-15. ratings
-16. admin_cases
-17. payment_webhook_events
-```
-
-Then immediately add:
-
-```text
-constraints
-indexes
-partial unique assignment indexes
-seed script
-integration tests
-```
-
-Do not postpone integrity constraints until after feature development.
-
----
-
-# 51. Database Acceptance Criteria
-
-Before API implementation is considered stable, verify:
-
-```text
-[ ] Every business table has a clear owner/source-of-truth purpose
-[ ] UUIDs are used consistently
-[ ] All business timestamps use TIMESTAMPTZ
-[ ] All monetary values use integer paise
-[ ] Coordinate ranges are validated
-[ ] Foreign keys exist for RouteBite-owned relationships
-[ ] Sensitive files are private and referenced by metadata IDs
-[ ] Order/payment/assignment states use constrained enums
-[ ] One ACTIVE assignment per order is DB-enforced
-[ ] One ACTIVE assignment per partner is DB-enforced
-[ ] Payment provider event IDs are unique
-[ ] Partner earning is unique per order
-[ ] Rating is unique per order
-[ ] Delivery OTP stores a hash, not plaintext
-[ ] Offer/price deadlines are stored durably
-[ ] Order events provide enough history to debug demo failures
-[ ] Critical multi-write operations use transactions
-[ ] Worker jobs re-check database truth before acting
-[ ] No critical business truth exists only in process memory
+transactions/conditional state checks yield one valid final state
+never CANCELLED while still holding active partner incorrectly
 ```
 
 ---
 
-# 52. Final Database Principle
+# 43. Backup and Recovery
 
-The RouteBite prototype should prefer database-enforced invariants over assumptions such as:
+MongoDB Atlas should use its available managed backup features appropriate to the selected plan when feasible.
+
+For the presentation prototype, also maintain deterministic seed/demo scripts so a clean demo dataset can be recreated quickly.
+
+Never depend on manually editing Atlas documents immediately before a presentation.
+
+---
+
+# 44. Seed Data
+
+Provide a development seed script for:
 
 ```text
-"the frontend won't send this twice"
-"two partners probably won't accept simultaneously"
-"the webhook probably arrives once"
-"the server probably won't restart during the timer"
+admin user
+customer demo user
+approved partner demo user
+sample scheduled trip
+optional sample completed order
 ```
 
-Those assumptions eventually fail.
+Do not hardcode real passwords/secrets into Git.
 
-The safer model is:
+Development credentials may come from environment variables or clearly documented local-only defaults.
 
-> **Application code decides what should happen; PostgreSQL guarantees that impossible states cannot be committed easily.**
+---
 
-That principle should guide every schema or concurrency change made after this document.
+# 45. Final Database Rule
+
+The MongoDB design is intentionally document-oriented, but critical correctness must remain explicit.
+
+> **Flexible schema does not mean flexible business rules.**
+
+RouteBite will use:
+
+```text
+Mongoose schema validation
++
+MongoDB indexes
++
+conditional atomic updates
++
+transactions for multi-document invariants
++
+idempotency keys
++
+centralized service state machines
+```
+
+This provides enough safety for the prototype while keeping the project inside a familiar MERN data layer.
