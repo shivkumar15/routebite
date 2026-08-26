@@ -1,0 +1,29 @@
+{
+  "name": "routebite-backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "test": "jest --runInBand"
+  },
+  "dependencies": {
+    "axios": "latest",
+    "bcrypt": "latest",
+    "cookie-parser": "latest",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "express-validator": "latest",
+    "jsonwebtoken": "latest",
+    "mongoose": "latest",
+    "multer": "latest",
+    "socket.io": "latest"
+  },
+  "devDependencies": {
+    "jest": "latest",
+    "nodemon": "latest",
+    "supertest": "latest"
+  }
+}
