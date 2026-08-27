@@ -5,17 +5,19 @@ import { User } from '../models/user.model.js';
 import { USER_ROLES, AUTH_TOKEN_TTL } from '../constants/auth.constants.js';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/app-error.js';
+import { sendEmailVerificationOtp } from './email.service.js';
 
 const BCRYPT_ROUNDS = 12;
-const PHONE_OTP_TTL_MS = 5 * 60 * 1000;
-const PHONE_OTP_COOLDOWN_MS = 60 * 1000;
-const PHONE_OTP_MAX_ATTEMPTS = 5;
+const OTP_TTL_MS = 5 * 60 * 1000;
+const OTP_COOLDOWN_MS = 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
 
 function toSafeUser(user) {
   return {
     id: user._id.toString(),
     name: user.name,
     email: user.email,
+    emailVerified: user.emailVerified,
     phone: user.phone,
     phoneVerified: user.phoneVerified,
     role: user.role,
@@ -38,6 +40,57 @@ function hashPhoneOtp(userId, otp) {
     .createHmac('sha256', env.jwtSecret)
     .update(`${userId}:${otp}`)
     .digest('hex');
+}
+
+function hashEmailOtp(userId, otp) {
+  return crypto
+    .createHmac('sha256', env.jwtSecret)
+    .update(`email:${userId}:${otp}`)
+    .digest('hex');
+}
+
+function otpMatches(storedHash, suppliedHash) {
+  return crypto.timingSafeEqual(
+    Buffer.from(suppliedHash, 'hex'),
+    Buffer.from(storedHash, 'hex'),
+  );
+}
+
+function assertOtpCanBeRequested(requestedAt) {
+  const now = Date.now();
+  const lastRequestedAt = requestedAt?.getTime?.() ?? 0;
+
+  if (lastRequestedAt && now - lastRequestedAt < OTP_COOLDOWN_MS) {
+    throw new AppError('Please wait before requesting another verification code.', {
+      statusCode: 429,
+      code: 'OTP_REQUEST_TOO_SOON',
+    });
+  }
+
+  return now;
+}
+
+function assertOtpIsUsable(verification) {
+  if (!verification?.otpHash || !verification.expiresAt) {
+    throw new AppError('Request a verification code first.', {
+      statusCode: 422,
+      code: 'OTP_NOT_REQUESTED',
+    });
+  }
+
+  if (verification.expiresAt.getTime() <= Date.now()) {
+    throw new AppError('The verification code has expired.', {
+      statusCode: 422,
+      code: 'OTP_EXPIRED',
+    });
+  }
+
+  if (verification.attempts >= OTP_MAX_ATTEMPTS) {
+    throw new AppError('Too many incorrect verification attempts.', {
+      statusCode: 429,
+      code: 'OTP_TOO_MANY_ATTEMPTS',
+    });
+  }
 }
 
 export async function registerUser({ name, email, phone, password }) {
@@ -125,6 +178,91 @@ export async function getCurrentUser(userId) {
   return toSafeUser(user);
 }
 
+export async function requestEmailOtp(userId) {
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new AppError('User account no longer exists.', {
+      statusCode: 401,
+      code: 'AUTH_USER_NOT_FOUND',
+    });
+  }
+
+  if (user.emailVerified) {
+    return { alreadyVerified: true, expiresAt: null, delivery: null };
+  }
+
+  const now = assertOtpCanBeRequested(user.emailVerification?.requestedAt);
+  const otp = String(crypto.randomInt(100000, 1000000));
+  const expiresAt = new Date(now + OTP_TTL_MS);
+  const otpHash = hashEmailOtp(user._id.toString(), otp);
+
+  user.emailVerification = {
+    otpHash,
+    requestedAt: new Date(now),
+    expiresAt,
+    attempts: 0,
+  };
+  await user.save();
+
+  try {
+    const { delivery } = await sendEmailVerificationOtp({
+      email: user.email,
+      otp,
+    });
+
+    return { alreadyVerified: false, expiresAt, delivery };
+  } catch (error) {
+    user.emailVerification = {
+      otpHash: null,
+      requestedAt: null,
+      expiresAt: null,
+      attempts: 0,
+    };
+    await user.save().catch(() => {});
+    throw error;
+  }
+}
+
+export async function verifyEmailOtp({ userId, otp }) {
+  const user = await User.findById(userId).select('+emailVerification.otpHash');
+
+  if (!user) {
+    throw new AppError('User account no longer exists.', {
+      statusCode: 401,
+      code: 'AUTH_USER_NOT_FOUND',
+    });
+  }
+
+  if (user.emailVerified) return toSafeUser(user);
+
+  const verification = user.emailVerification;
+  assertOtpIsUsable(verification);
+
+  const suppliedHash = hashEmailOtp(user._id.toString(), otp);
+
+  if (!otpMatches(verification.otpHash, suppliedHash)) {
+    verification.attempts += 1;
+    await user.save();
+
+    throw new AppError('Incorrect verification code.', {
+      statusCode: 422,
+      code: 'OTP_INVALID',
+    });
+  }
+
+  user.emailVerified = true;
+  user.emailVerification = {
+    otpHash: null,
+    requestedAt: null,
+    expiresAt: null,
+    attempts: 0,
+  };
+  await user.save();
+
+  return toSafeUser(user);
+}
+
 export async function requestPhoneOtp(userId) {
   if (env.nodeEnv === 'production') {
     throw new AppError('SMS delivery is not configured yet.', {
@@ -146,18 +284,9 @@ export async function requestPhoneOtp(userId) {
     return { alreadyVerified: true, expiresAt: null };
   }
 
-  const now = Date.now();
-  const requestedAt = user.phoneVerification?.requestedAt?.getTime?.() ?? 0;
-
-  if (requestedAt && now - requestedAt < PHONE_OTP_COOLDOWN_MS) {
-    throw new AppError('Please wait before requesting another verification code.', {
-      statusCode: 429,
-      code: 'OTP_REQUEST_TOO_SOON',
-    });
-  }
-
+  const now = assertOtpCanBeRequested(user.phoneVerification?.requestedAt);
   const otp = String(crypto.randomInt(100000, 1000000));
-  const expiresAt = new Date(now + PHONE_OTP_TTL_MS);
+  const expiresAt = new Date(now + OTP_TTL_MS);
 
   user.phoneVerification = {
     otpHash: hashPhoneOtp(user._id.toString(), otp),
@@ -186,35 +315,11 @@ export async function verifyPhoneOtp({ userId, otp }) {
   if (user.phoneVerified) return toSafeUser(user);
 
   const verification = user.phoneVerification;
-
-  if (!verification?.otpHash || !verification.expiresAt) {
-    throw new AppError('Request a verification code first.', {
-      statusCode: 422,
-      code: 'OTP_NOT_REQUESTED',
-    });
-  }
-
-  if (verification.expiresAt.getTime() <= Date.now()) {
-    throw new AppError('The verification code has expired.', {
-      statusCode: 422,
-      code: 'OTP_EXPIRED',
-    });
-  }
-
-  if (verification.attempts >= PHONE_OTP_MAX_ATTEMPTS) {
-    throw new AppError('Too many incorrect verification attempts.', {
-      statusCode: 429,
-      code: 'OTP_TOO_MANY_ATTEMPTS',
-    });
-  }
+  assertOtpIsUsable(verification);
 
   const suppliedHash = hashPhoneOtp(user._id.toString(), otp);
-  const matches = crypto.timingSafeEqual(
-    Buffer.from(suppliedHash, 'hex'),
-    Buffer.from(verification.otpHash, 'hex'),
-  );
 
-  if (!matches) {
+  if (!otpMatches(verification.otpHash, suppliedHash)) {
     verification.attempts += 1;
     await user.save();
 
