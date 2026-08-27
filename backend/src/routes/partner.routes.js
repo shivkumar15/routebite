@@ -5,6 +5,7 @@ import {
   reject as rejectOffer,
 } from '../controllers/offer.controller.js';
 import {
+  activeOrder,
   apply,
   me,
   operationalState,
@@ -35,6 +36,7 @@ router.post('/apply', requireAuth, partnerApplicationValidators, validateRequest
 router.get('/profile', requireAuth, me);
 
 router.get('/operational-state', requireAuth, requireApprovedPartner, operationalState);
+router.get('/active-order', requireAuth, requireApprovedPartner, activeOrder);
 router.patch(
   '/availability',
   requireAuth,
