@@ -7,6 +7,7 @@ import {
   WEBHOOK_PROCESSING_STATUS,
   WebhookEvent,
 } from '../models/webhook-event.model.js';
+import { runMatchingForOrder } from './matching.service.js';
 import { verifyRazorpayWebhookSignature } from './razorpay.service.js';
 import { AppError } from '../utils/app-error.js';
 
@@ -25,11 +26,13 @@ async function finishEvent(eventId, status, extra = {}) {
 
 async function confirmCapturedPayment({ payment, providerPaymentId }) {
   const session = await mongoose.startSession();
+  let orderId = payment.orderId;
 
   try {
     await session.withTransaction(async () => {
       const currentPayment = await Payment.findById(payment._id).session(session);
       if (!currentPayment) return;
+      orderId = currentPayment.orderId;
 
       if (currentPayment.status !== PAYMENT_STATUS.CONFIRMED) {
         await Payment.updateOne(
@@ -61,6 +64,18 @@ async function confirmCapturedPayment({ payment, providerPaymentId }) {
     });
   } finally {
     await session.endSession();
+  }
+
+  const currentOrder = await Order.findById(orderId).select('status');
+  if (currentOrder?.status === ORDER_STATUS.MATCHING) {
+    try {
+      await runMatchingForOrder(orderId);
+    } catch (error) {
+      console.error('Webhook-confirmed payment could not start matching', {
+        orderId: orderId.toString(),
+        message: error.message,
+      });
+    }
   }
 }
 
