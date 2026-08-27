@@ -5,6 +5,7 @@ export function toCustomerMatchingSummary(matching) {
     id: matching.id,
     attemptNumber: matching.attemptNumber,
     status: matching.status,
+    resumeAt: matching.resumeAt ?? null,
     routeSource: matching.routeSource,
     discoveredCandidateCount: matching.discoveredCandidateCount,
     eligibleCandidateCount: matching.eligibleCandidateCount,
