@@ -7,7 +7,9 @@ import {
   getCurrentUser,
   loginUser,
   registerUser,
+  requestEmailOtp,
   requestPhoneOtp,
+  verifyEmailOtp,
   verifyPhoneOtp,
 } from '../services/auth.service.js';
 import { getPartnerCapabilityForUser } from '../services/partner.service.js';
@@ -78,6 +80,35 @@ export async function me(req, res, next) {
     res.status(200).json({
       success: true,
       data: { user, partner },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function requestEmailVerification(req, res, next) {
+  try {
+    const result = await requestEmailOtp(req.auth.userId);
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function verifyEmailVerification(req, res, next) {
+  try {
+    const user = await verifyEmailOtp({
+      userId: req.auth.userId,
+      otp: req.body.otp,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: { user },
     });
   } catch (error) {
     next(error);
