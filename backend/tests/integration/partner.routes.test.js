@@ -55,6 +55,13 @@ describe('partner route contract', () => {
     expect(response.body.error.code).toBe('AUTH_REQUIRED');
   });
 
+  test('active delivery read requires authentication', async () => {
+    const response = await request(app).get('/api/v1/partner/active-order');
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
   test('offer list requires authentication', async () => {
     const response = await request(app).get('/api/v1/partner/offers');
 
