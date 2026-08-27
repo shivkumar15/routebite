@@ -1,10 +1,12 @@
 import mongoose from 'mongoose';
+import { USER_ROLES } from '../constants/auth.constants.js';
 import {
   PARTNER_VERIFICATION_STATUS,
   UPLOAD_PURPOSE,
 } from '../constants/partner.constants.js';
 import { Partner } from '../models/partner.model.js';
 import { UploadAsset } from '../models/upload-asset.model.js';
+import { User } from '../models/user.model.js';
 import { AppError } from '../utils/app-error.js';
 import { createAuthenticatedAssetUrl } from './upload.service.js';
 
@@ -42,6 +44,24 @@ export async function getPartnerCapabilityForUser(userId) {
   };
 }
 
+async function assertUserCanBecomePartner(userId) {
+  const user = await User.findById(userId).select('role');
+
+  if (!user) {
+    throw new AppError('User account no longer exists.', {
+      statusCode: 401,
+      code: 'AUTH_USER_NOT_FOUND',
+    });
+  }
+
+  if (user.role === USER_ROLES.ADMIN) {
+    throw new AppError('Administrator accounts cannot become delivery partners.', {
+      statusCode: 403,
+      code: 'ADMIN_PARTNER_CONFLICT',
+    });
+  }
+}
+
 async function assertApplicationAssets({ userId, profilePhotoAssetId, collegeIdAssetId }) {
   const ids = [profilePhotoAssetId, collegeIdAssetId];
 
@@ -75,6 +95,8 @@ async function assertApplicationAssets({ userId, profilePhotoAssetId, collegeIdA
 }
 
 export async function applyForPartner({ userId, payload }) {
+  await assertUserCanBecomePartner(userId);
+
   const existing = await Partner.findOne({ userId }).select('_id verificationStatus').lean();
 
   if (existing) {
@@ -133,10 +155,14 @@ export async function listPendingPartners() {
     verificationStatus: PARTNER_VERIFICATION_STATUS.PENDING,
   })
     .sort({ createdAt: 1 })
-    .populate('userId', 'name email emailVerified phone phoneVerified')
+    .populate('userId', 'name email emailVerified phone phoneVerified role')
     .lean();
 
-  const assetIds = partners.flatMap((partner) => [
+  const reviewablePartners = partners.filter(
+    (partner) => partner.userId && partner.userId.role !== USER_ROLES.ADMIN,
+  );
+
+  const assetIds = reviewablePartners.flatMap((partner) => [
     partner.profilePhotoAssetId,
     partner.collegeIdentity.documentAssetId,
   ]);
@@ -144,7 +170,7 @@ export async function listPendingPartners() {
   const assets = await UploadAsset.find({ _id: { $in: assetIds } }).select('+publicId');
   const assetById = new Map(assets.map((asset) => [asset._id.toString(), asset]));
 
-  return partners.map((partner) => {
+  return reviewablePartners.map((partner) => {
     const profilePhoto = assetById.get(partner.profilePhotoAssetId.toString());
     const collegeId = assetById.get(partner.collegeIdentity.documentAssetId.toString());
 
@@ -171,12 +197,19 @@ export async function listPendingPartners() {
 }
 
 export async function approvePartner({ partnerId, adminUserId }) {
-  const partner = await Partner.findById(partnerId).populate('userId', 'emailVerified');
+  const partner = await Partner.findById(partnerId).populate('userId', 'emailVerified role');
 
   if (!partner) {
     throw new AppError('Partner application not found.', {
       statusCode: 404,
       code: 'PARTNER_APPLICATION_NOT_FOUND',
+    });
+  }
+
+  if (partner.userId.role === USER_ROLES.ADMIN) {
+    throw new AppError('Administrator accounts cannot be approved as delivery partners.', {
+      statusCode: 409,
+      code: 'ADMIN_PARTNER_CONFLICT',
     });
   }
 
