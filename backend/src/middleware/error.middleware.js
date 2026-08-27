@@ -1,6 +1,7 @@
 export function notFound(req, res, next) {
   const error = new Error(`Route not found: ${req.method} ${req.originalUrl}`);
   error.statusCode = 404;
+  error.code = 'ROUTE_NOT_FOUND';
   next(error);
 }
 
@@ -12,9 +13,12 @@ export function errorHandler(error, req, res, next) {
   }
 
   res.status(statusCode).json({
+    success: false,
     error: {
       code: error.code ?? 'INTERNAL_SERVER_ERROR',
       message: statusCode >= 500 ? 'Something went wrong.' : error.message,
+      details: error.details ?? null,
+      requestId: req.requestId ?? null,
     },
   });
 }
