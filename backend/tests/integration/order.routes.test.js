@@ -51,4 +51,11 @@ describe('order route contract', () => {
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('AUTH_REQUIRED');
   });
+
+  test('reading matching state requires authentication', async () => {
+    const response = await request(app)
+      .get('/api/v1/orders/507f1f77bcf86cd799439011/matching');
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
 });

@@ -28,4 +28,7 @@ export const env = {
     keySecret: process.env.RAZORPAY_KEY_SECRET ?? '',
     webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET ?? '',
   },
+  googleMaps: {
+    apiKey: process.env.GOOGLE_MAPS_API_KEY ?? '',
+  },
 };

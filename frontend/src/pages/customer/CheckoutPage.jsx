@@ -9,6 +9,10 @@ function formatMoney(paise) {
   return `₹${(Number(paise) / 100).toFixed(2)}`;
 }
 
+function formatDate(value) {
+  return value ? new Date(value).toLocaleString() : '';
+}
+
 function loadRazorpayCheckout() {
   if (window.Razorpay) return Promise.resolve();
 
@@ -41,19 +45,22 @@ export default function CheckoutPage() {
   const { user } = useAuth();
   const [order, setOrder] = useState(null);
   const [payment, setPayment] = useState(null);
+  const [matching, setMatching] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
   const loadState = useCallback(async () => {
-    const [orderResponse, paymentResponse] = await Promise.all([
+    const [orderResponse, paymentResponse, matchingResponse] = await Promise.all([
       api.get(`/orders/${orderId}`),
       api.get(`/orders/${orderId}/payment`),
+      api.get(`/orders/${orderId}/matching`),
     ]);
 
     setOrder(orderResponse.data.data.order);
     setPayment(paymentResponse.data.data.payment);
+    setMatching(matchingResponse.data.data.matching);
   }, [orderId]);
 
   useEffect(() => {
@@ -61,13 +68,15 @@ export default function CheckoutPage() {
 
     async function load() {
       try {
-        const [orderResponse, paymentResponse] = await Promise.all([
+        const [orderResponse, paymentResponse, matchingResponse] = await Promise.all([
           api.get(`/orders/${orderId}`),
           api.get(`/orders/${orderId}/payment`),
+          api.get(`/orders/${orderId}/matching`),
         ]);
         if (!active) return;
         setOrder(orderResponse.data.data.order);
         setPayment(paymentResponse.data.data.payment);
+        setMatching(matchingResponse.data.data.matching);
       } catch (requestError) {
         if (active) {
           setError(requestError.response?.data?.error?.message ?? 'Could not load checkout.');
@@ -89,8 +98,9 @@ export default function CheckoutPage() {
     });
 
     setPayment(data.data.payment);
+    setMatching(data.data.matching ?? null);
     await loadState();
-    setMessage('Test payment confirmed by RouteBite. This request is now eligible for matching.');
+    setMessage('Test payment confirmed by RouteBite. Matching orchestration has started.');
   }
 
   async function handlePay() {
@@ -191,8 +201,11 @@ export default function CheckoutPage() {
   }
 
   const pricing = order.pricing;
-  const confirmed = payment?.status === 'PAYMENT_CONFIRMED' || order.status === 'MATCHING';
+  const confirmed = payment?.status === 'PAYMENT_CONFIRMED';
   const payable = ['DRAFT', 'AWAITING_PAYMENT'].includes(order.status);
+  const waitingForHorizon = matching?.status === 'WAITING_FOR_HORIZON';
+  const candidatesReady = matching?.status === 'CANDIDATES_READY';
+  const noCandidates = order.status === 'MATCHING_FAILED' || matching?.status === 'NO_CANDIDATES';
 
   return (
     <main className="order-shell">
@@ -238,11 +251,44 @@ export default function CheckoutPage() {
           </div>
         ) : null}
 
-        {confirmed ? (
+        {confirmed && waitingForHorizon ? (
           <div className="checkout-success-panel">
-            <strong>Test payment confirmed</strong>
-            <p>The backend verified the Razorpay signature. Matching logic will process this `MATCHING` order in Phase 6.</p>
+            <strong>Payment confirmed — matching scheduled</strong>
+            <p>
+              This is a future delivery, so RouteBite will start live matching around {formatDate(matching.resumeAt)} instead of failing it hours too early.
+            </p>
           </div>
+        ) : null}
+
+        {confirmed && candidatesReady ? (
+          <div className="checkout-success-panel">
+            <strong>Eligible partners found</strong>
+            <p>
+              RouteBite found {matching.eligibleCandidateCount} eligible candidate{matching.eligibleCandidateCount === 1 ? '' : 's'} and prepared the top {matching.offerReadyCount} for offer dispatch. Phase 7 will add accept/reject and atomic assignment.
+            </p>
+          </div>
+        ) : null}
+
+        {confirmed && !waitingForHorizon && !candidatesReady && !noCandidates ? (
+          <div className="checkout-success-panel">
+            <strong>Payment confirmed — finding a partner</strong>
+            <p>RouteBite is evaluating verified nearby and on-my-way partners against this delivery window.</p>
+          </div>
+        ) : null}
+
+        {confirmed && noCandidates ? (
+          <div className="matching-failed-panel">
+            <strong>No eligible partner right now</strong>
+            <p>
+              The matching attempt completed without a partner who could satisfy the current route and delivery window. The order is explicitly marked MATCHING_FAILED rather than waiting indefinitely.
+            </p>
+          </div>
+        ) : null}
+
+        {matching?.routeSource === 'DEV_APPROXIMATION' ? (
+          <p className="prototype-note">
+            Development routing fallback is active. Add GOOGLE_MAPS_API_KEY to the backend to use Google road routes and ETA.
+          </p>
         ) : null}
 
         {message ? <p className="success-message">{message}</p> : null}
