@@ -1,11 +1,16 @@
+import mongoose from 'mongoose';
+import { MATCHING_PARTNER_MODE } from '../constants/matching.constants.js';
+import { OFFER_STATUS } from '../constants/offer.constants.js';
 import {
   PARTNER_AVAILABILITY_STATUS,
   PARTNER_OPERATION_LIMITS,
   PARTNER_VERIFICATION_STATUS,
   TRIP_STATUS,
 } from '../constants/partner.constants.js';
+import { Offer } from '../models/offer.model.js';
 import { Partner } from '../models/partner.model.js';
 import { Trip } from '../models/trip.model.js';
+import { dispatchNextOfferBatch } from './offer.service.js';
 import { AppError } from '../utils/app-error.js';
 
 function toOperationalPartner(partner) {
@@ -62,6 +67,63 @@ export async function updatePartnerLocation({ partnerId, payload }) {
   return toOperationalPartner(partner);
 }
 
+async function goOfflineAndCancelNearbyOffers(partnerId) {
+  const session = await mongoose.startSession();
+  let updatedPartner = null;
+  let attemptIds = [];
+  const now = new Date();
+
+  try {
+    await session.withTransaction(async () => {
+      const partner = await Partner.findOne({
+        _id: partnerId,
+        verificationStatus: PARTNER_VERIFICATION_STATUS.APPROVED,
+        activeOrderId: null,
+      }).session(session);
+
+      if (!partner) {
+        throw new AppError('Availability cannot be changed while you have an active order.', {
+          statusCode: 409,
+          code: 'PARTNER_HAS_ACTIVE_ORDER',
+        });
+      }
+
+      partner.availabilityStatus = PARTNER_AVAILABILITY_STATUS.OFFLINE;
+      await partner.save({ session });
+      updatedPartner = partner;
+
+      const pendingOffers = await Offer.find({
+        partnerId: partner._id,
+        partnerMode: MATCHING_PARTNER_MODE.AVAILABLE_NOW,
+        status: OFFER_STATUS.PENDING,
+      })
+        .select('matchingAttemptId')
+        .session(session);
+
+      if (pendingOffers.length > 0) {
+        await Offer.updateMany(
+          {
+            partnerId: partner._id,
+            partnerMode: MATCHING_PARTNER_MODE.AVAILABLE_NOW,
+            status: OFFER_STATUS.PENDING,
+          },
+          { $set: { status: OFFER_STATUS.CANCELLED, respondedAt: now } },
+          { session },
+        );
+        attemptIds = [...new Set(pendingOffers.map((offer) => offer.matchingAttemptId.toString()))];
+      }
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  for (const attemptId of attemptIds) {
+    await dispatchNextOfferBatch(attemptId, now);
+  }
+
+  return toOperationalPartner(updatedPartner);
+}
+
 export async function updatePartnerAvailability({ partnerId, status }) {
   const partner = await getApprovedPartner(partnerId);
 
@@ -74,6 +136,10 @@ export async function updatePartnerAvailability({ partnerId, status }) {
       statusCode: 409,
       code: 'PARTNER_HAS_ACTIVE_ORDER',
     });
+  }
+
+  if (status === PARTNER_AVAILABILITY_STATUS.OFFLINE) {
+    return goOfflineAndCancelNearbyOffers(partner._id);
   }
 
   if (status === PARTNER_AVAILABILITY_STATUS.AVAILABLE_NOW) {
