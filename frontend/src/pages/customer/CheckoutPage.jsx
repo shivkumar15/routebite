@@ -250,7 +250,7 @@ export default function CheckoutPage() {
           <div className="checkout-success-panel">
             <strong>Eligible partners found</strong>
             <p>
-              RouteBite found {matching.eligibleCandidateCount} eligible candidate{matching.eligibleCandidateCount === 1 ? '' : 's'} and prepared the top {matching.offerReadyPartnerIds.length} for offer dispatch. Phase 7 will add accept/reject and atomic assignment.
+              RouteBite found {matching.eligibleCandidateCount} eligible candidate{matching.eligibleCandidateCount === 1 ? '' : 's'} and prepared the top {matching.offerReadyCount} for offer dispatch. Phase 7 will add accept/reject and atomic assignment.
             </p>
           </div>
         ) : null}
