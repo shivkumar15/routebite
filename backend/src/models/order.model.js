@@ -32,17 +32,28 @@ const pointSchema = new mongoose.Schema(
   { _id: false },
 );
 
+function moneyField({ required = true, defaultValue } = {}) {
+  const field = {
+    type: Number,
+    required,
+    min: 0,
+    validate: {
+      validator: Number.isSafeInteger,
+      message: 'Money values must be integer paise.',
+    },
+  };
+
+  if (defaultValue !== undefined) field.default = defaultValue;
+  return field;
+}
+
 const pricingSchema = new mongoose.Schema(
   {
-    estimatedFoodCostPaise: {
-      type: Number,
-      required: true,
-      min: 0,
-      validate: {
-        validator: Number.isSafeInteger,
-        message: 'Estimated food cost must be an integer number of paise.',
-      },
-    },
+    estimatedFoodCostPaise: moneyField(),
+    customerDeliveryChargePaise: moneyField({ defaultValue: 0 }),
+    partnerBaseEarningPaise: moneyField({ defaultValue: 0 }),
+    platformFeePaise: moneyField({ defaultValue: 0 }),
+    estimatedCustomerTotalPaise: moneyField({ defaultValue: 0 }),
   },
   { _id: false },
 );

@@ -7,6 +7,7 @@ import healthRoutes from './routes/health.routes.js';
 import orderRoutes from './routes/order.routes.js';
 import partnerRoutes from './routes/partner.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
+import webhookRoutes from './routes/webhook.routes.js';
 import { env } from './config/env.js';
 import { errorHandler, notFound } from './middleware/error.middleware.js';
 
@@ -19,6 +20,13 @@ app.use(
     origin: env.clientOrigin,
     credentials: true,
   }),
+);
+
+// Razorpay signs the exact raw bytes. This route must run before express.json().
+app.use(
+  '/api/v1/webhooks',
+  express.raw({ type: 'application/json', limit: '512kb' }),
+  webhookRoutes,
 );
 
 app.use(express.json({ limit: '1mb' }));

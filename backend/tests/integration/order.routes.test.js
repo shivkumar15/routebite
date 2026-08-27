@@ -27,4 +27,28 @@ describe('order route contract', () => {
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('AUTH_REQUIRED');
   });
+
+  test('creating a payment attempt requires authentication', async () => {
+    const response = await request(app)
+      .post('/api/v1/orders/507f1f77bcf86cd799439011/payment')
+      .set('Idempotency-Key', 'test-payment-key')
+      .send({});
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
+  test('reading payment status requires authentication', async () => {
+    const response = await request(app)
+      .get('/api/v1/orders/507f1f77bcf86cd799439011/payment');
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
+  test('payment verification requires authentication', async () => {
+    const response = await request(app)
+      .post('/api/v1/orders/507f1f77bcf86cd799439011/payment/verify')
+      .send({});
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
 });
