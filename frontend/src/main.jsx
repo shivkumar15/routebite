@@ -8,6 +8,7 @@ import './styles/globals.css';
 import './styles/typography.css';
 import './styles/partner.css';
 import './styles/order.css';
+import './styles/matching.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
