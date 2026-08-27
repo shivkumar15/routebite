@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import {
   MATCHING_ATTEMPT_STATUS,
+  MATCHING_LIMITS,
   MATCHING_PARTNER_MODE,
 } from '../constants/matching.constants.js';
 import { OFFER_LIMITS, OFFER_STATUS } from '../constants/offer.constants.js';
@@ -106,6 +107,29 @@ async function candidateStillOperational(candidate, now) {
   return false;
 }
 
+async function offerStillOperationalInTransaction({ offer, partner, now, session }) {
+  if (offer.partnerMode === MATCHING_PARTNER_MODE.AVAILABLE_NOW) {
+    return (
+      partner.availabilityStatus === PARTNER_AVAILABILITY_STATUS.AVAILABLE_NOW &&
+      locationIsFresh(partner, now)
+    );
+  }
+
+  if (!offer.tripId) return false;
+  const trip = await Trip.findOne({ _id: offer.tripId, partnerId: partner._id }).session(session);
+  if (!trip) return false;
+
+  if (offer.partnerMode === MATCHING_PARTNER_MODE.TRIP_SCHEDULED) {
+    return trip.status === TRIP_STATUS.SCHEDULED;
+  }
+
+  if (offer.partnerMode === MATCHING_PARTNER_MODE.TRIP_ACTIVE) {
+    return trip.status === TRIP_STATUS.ACTIVE && locationIsFresh(partner, now);
+  }
+
+  return false;
+}
+
 async function acquireDispatchLease(matchingAttemptId, now) {
   const leaseUntil = new Date(now.getTime() + DISPATCH_LEASE_MS);
   return MatchingAttempt.findOneAndUpdate(
@@ -155,20 +179,34 @@ async function expirePendingForAttempt(matchingAttemptId, now) {
   return stale;
 }
 
-async function failExhaustedOrder(order, reason) {
+async function failExhaustedOrder({ order, matchingAttemptId, reason, now }) {
   const moved = await Order.findOneAndUpdate(
     { _id: order._id, status: ORDER_STATUS.MATCHING, assignedPartnerId: null },
     { $set: { status: ORDER_STATUS.MATCHING_FAILED } },
     { new: true },
   );
 
-  if (moved) {
-    emitToCustomer(order.customerId.toString(), 'matching:failed', {
-      orderId: order._id.toString(),
-      status: ORDER_STATUS.MATCHING_FAILED,
-      reason,
-    });
-  }
+  if (!moved) return null;
+
+  await MatchingAttempt.updateOne(
+    {
+      _id: matchingAttemptId,
+      status: MATCHING_ATTEMPT_STATUS.CANDIDATES_READY,
+    },
+    {
+      $set: {
+        status: MATCHING_ATTEMPT_STATUS.NO_CANDIDATES,
+        failureReason: reason,
+        completedAt: now,
+      },
+    },
+  );
+
+  emitToCustomer(order.customerId.toString(), 'matching:failed', {
+    orderId: order._id.toString(),
+    status: ORDER_STATUS.MATCHING_FAILED,
+    reason,
+  });
 
   return moved;
 }
@@ -205,7 +243,7 @@ export async function dispatchNextOfferBatch(matchingAttemptId, now = new Date()
 
     const createdOffers = [];
     for (const candidate of candidates) {
-      if (createdOffers.length >= 3) break;
+      if (createdOffers.length >= MATCHING_LIMITS.OFFER_BATCH_SIZE) break;
       if (alreadyOffered.has(candidate.partnerId.toString())) continue;
       if (!(await candidateStillOperational(candidate, now))) continue;
 
@@ -235,10 +273,13 @@ export async function dispatchNextOfferBatch(matchingAttemptId, now = new Date()
     }
 
     if (createdOffers.length === 0) {
-      await failExhaustedOrder(
+      const reason = 'All currently eligible offer candidates were exhausted or became unavailable.';
+      await failExhaustedOrder({
         order,
-        'All currently eligible offer candidates were exhausted or became unavailable.',
-      );
+        matchingAttemptId: leasedAttempt._id,
+        reason,
+        now,
+      });
       return { dispatched: 0, exhausted: true };
     }
 
@@ -395,6 +436,25 @@ export async function acceptOffer({ offerId, partnerId }, now = new Date()) {
           { session },
         );
         deferredError = new AppError('You are no longer available for this request.', {
+          statusCode: 409,
+          code: 'PARTNER_NOT_AVAILABLE',
+        });
+        return;
+      }
+
+      const stillOperational = await offerStillOperationalInTransaction({
+        offer,
+        partner,
+        now,
+        session,
+      });
+      if (!stillOperational) {
+        await Offer.updateOne(
+          { _id: offer._id, status: OFFER_STATUS.PENDING },
+          { $set: { status: OFFER_STATUS.CANCELLED, respondedAt: now } },
+          { session },
+        );
+        deferredError = new AppError('You are no longer operationally eligible for this offer.', {
           statusCode: 409,
           code: 'PARTNER_NOT_AVAILABLE',
         });
