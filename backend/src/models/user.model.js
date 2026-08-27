@@ -44,7 +44,6 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: Object.values(USER_ROLES),
       default: USER_ROLES.USER,
-      immutable: true,
     },
     tokenVersion: {
       type: Number,
