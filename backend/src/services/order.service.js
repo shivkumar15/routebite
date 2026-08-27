@@ -1,5 +1,6 @@
 import { DELIVERY_TYPE, MAX_ASAP_DELIVERY_MINUTES, ORDER_STATUS } from '../constants/order.constants.js';
 import { Order } from '../models/order.model.js';
+import { calculateCheckoutPricing } from './pricing.service.js';
 import { AppError } from '../utils/app-error.js';
 
 function pointFromInput(location) {
@@ -44,6 +45,8 @@ function resolveDeliveryWindow(payload, now = new Date()) {
 }
 
 function toSafeOrder(order) {
+  const pricing = calculateCheckoutPricing(order.pricing.estimatedFoodCostPaise);
+
   return {
     id: order._id.toString(),
     status: order.status,
@@ -63,7 +66,8 @@ function toSafeOrder(order) {
     deliveryType: order.deliveryType,
     deliveryWindowStart: order.deliveryWindowStart,
     deliveryWindowEnd: order.deliveryWindowEnd,
-    estimatedFoodCostPaise: order.pricing.estimatedFoodCostPaise,
+    estimatedFoodCostPaise: pricing.estimatedFoodCostPaise,
+    pricing,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
   };
