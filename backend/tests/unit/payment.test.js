@@ -6,11 +6,15 @@ process.env.MONGODB_URI ??= 'mongodb://127.0.0.1:27017/routebite-test-not-used';
 process.env.JWT_SECRET ??= 'test-jwt-secret-that-is-long-enough-for-routebite-tests';
 process.env.RAZORPAY_KEY_ID ??= 'rzp_test_routebite';
 process.env.RAZORPAY_KEY_SECRET ??= 'routebite-test-secret';
+process.env.RAZORPAY_WEBHOOK_SECRET ??= 'routebite-test-webhook-secret';
 
 const { PAYMENT_STATUS } = await import('../../src/constants/payment.constants.js');
 const { Payment } = await import('../../src/models/payment.model.js');
 const { calculateCheckoutPricing } = await import('../../src/services/pricing.service.js');
-const { verifyRazorpayPaymentSignature } = await import('../../src/services/razorpay.service.js');
+const {
+  verifyRazorpayPaymentSignature,
+  verifyRazorpayWebhookSignature,
+} = await import('../../src/services/razorpay.service.js');
 
 describe('Phase 5 payment rules', () => {
   test('checkout pricing is calculated in integer paise on the backend', () => {
@@ -77,5 +81,16 @@ describe('Phase 5 payment rules', () => {
         providerSignature: '0'.repeat(64),
       }),
     ).toBe(false);
+  });
+
+  test('Razorpay webhook verification signs the exact raw body', () => {
+    const rawBody = Buffer.from(JSON.stringify({ event: 'payment.captured', value: 1 }));
+    const signature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+      .update(rawBody)
+      .digest('hex');
+
+    expect(verifyRazorpayWebhookSignature({ rawBody, signature })).toBe(true);
+    expect(verifyRazorpayWebhookSignature({ rawBody, signature: '0'.repeat(64) })).toBe(false);
   });
 });
