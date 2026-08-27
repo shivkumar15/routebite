@@ -1,0 +1,16 @@
+.matching-failed-panel {
+  margin-bottom: 16px;
+  padding: 20px;
+  border: 1px solid rgba(233, 90, 61, 0.28);
+  border-radius: var(--radius-card);
+  background: rgba(233, 90, 61, 0.07);
+}
+
+.matching-failed-panel strong {
+  color: var(--color-brand-dark);
+}
+
+.matching-failed-panel p {
+  margin: 6px 0 0;
+  color: var(--color-text-muted);
+}
