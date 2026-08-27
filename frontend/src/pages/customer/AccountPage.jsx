@@ -55,6 +55,8 @@ export default function AccountPage() {
   }
 
   const isAdmin = user.role === 'ADMIN';
+  const isApprovedPartner =
+    !isAdmin && partner.exists && partner.verificationStatus === 'APPROVED';
 
   return (
     <main className="app-shell account-shell">
@@ -111,10 +113,18 @@ export default function AccountPage() {
                 <Link className="primary-link" to="/partner/apply">Apply to become a partner</Link>
               </>
             ) : (
-              <div className="partner-status-row">
-                <span>Verification status</span>
-                <strong>{partner.verificationStatus}</strong>
-              </div>
+              <>
+                <div className="partner-status-row">
+                  <span>Verification status</span>
+                  <strong>{partner.verificationStatus}</strong>
+                </div>
+                {isApprovedPartner ? (
+                  <div className="partner-account-action">
+                    <p className="form-intro">You’re approved. Choose whether you’re available nearby or already heading somewhere.</p>
+                    <Link className="primary-link" to="/partner">Open partner workspace</Link>
+                  </div>
+                ) : null}
+              </>
             )}
           </section>
         ) : null}
