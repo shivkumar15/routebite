@@ -44,9 +44,28 @@ function resolveDeliveryWindow(payload, now = new Date()) {
   return { start, end };
 }
 
-function toSafeOrder(order) {
-  const pricing = calculateCheckoutPricing(order.pricing.estimatedFoodCostPaise);
+function safePricing(order) {
+  const estimate = calculateCheckoutPricing(order.pricing.estimatedFoodCostPaise);
+  return {
+    ...estimate,
+    finalCustomerTotalPaise: order.pricing.finalCustomerTotalPaise ?? null,
+  };
+}
 
+function safePriceAdjustment(order) {
+  const adjustment = order.priceAdjustment;
+  return {
+    status: adjustment?.status ?? 'NONE',
+    actualFoodCostPaise: adjustment?.actualFoodCostPaise ?? null,
+    differencePaise: adjustment?.differencePaise ?? null,
+    receiptAttached: Boolean(adjustment?.receiptAssetId),
+    reportedAt: adjustment?.reportedAt ?? null,
+    approvalExpiresAt: adjustment?.approvalExpiresAt ?? null,
+    resolvedAt: adjustment?.resolvedAt ?? null,
+  };
+}
+
+function toSafeOrder(order) {
   return {
     id: order._id.toString(),
     status: order.status,
@@ -66,8 +85,11 @@ function toSafeOrder(order) {
     deliveryType: order.deliveryType,
     deliveryWindowStart: order.deliveryWindowStart,
     deliveryWindowEnd: order.deliveryWindowEnd,
-    estimatedFoodCostPaise: pricing.estimatedFoodCostPaise,
-    pricing,
+    estimatedFoodCostPaise: order.pricing.estimatedFoodCostPaise,
+    pricing: safePricing(order),
+    priceAdjustment: safePriceAdjustment(order),
+    pickupStartedAt: order.pickupStartedAt ?? null,
+    pickedUpAt: order.pickedUpAt ?? null,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
   };
@@ -127,7 +149,7 @@ export async function updateDraftOrder({ customerId, orderId, payload }) {
   const order = await Order.findOneAndUpdate(
     { _id: orderId, customerId, status: ORDER_STATUS.DRAFT },
     { $set: fields },
-    { new: true, runValidators: true },
+    { returnDocument: 'after', runValidators: true },
   );
 
   if (!order) {
