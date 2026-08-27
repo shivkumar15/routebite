@@ -62,6 +62,29 @@ describe('partner route contract', () => {
     expect(response.body.error.code).toBe('AUTH_REQUIRED');
   });
 
+  test('start pickup requires authentication', async () => {
+    const response = await request(app).post('/api/v1/partner/active-order/start-pickup');
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
+  test('actual food price requires authentication', async () => {
+    const response = await request(app)
+      .post('/api/v1/partner/active-order/actual-price')
+      .send({ actualFoodCostPaise: 12000 });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
+  test('pickup confirmation requires authentication', async () => {
+    const response = await request(app).post('/api/v1/partner/active-order/confirm-pickup');
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
   test('offer list requires authentication', async () => {
     const response = await request(app).get('/api/v1/partner/offers');
 
