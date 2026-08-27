@@ -54,6 +54,8 @@ export default function AccountPage() {
     }
   }
 
+  const isAdmin = user.role === 'ADMIN';
+
   return (
     <main className="app-shell account-shell">
       <section className="account-card wide-account-card">
@@ -100,24 +102,27 @@ export default function AccountPage() {
           </section>
         ) : null}
 
-        <section className="account-section">
-          <h2>Delivery partner</h2>
-          {!partner.exists ? (
-            <>
-              <p className="form-intro">Apply with a profile photo and campus ID. Vendor/customer screens will never receive your ID document.</p>
-              <Link className="primary-link" to="/partner/apply">Apply to become a partner</Link>
-            </>
-          ) : (
-            <div className="partner-status-row">
-              <span>Verification status</span>
-              <strong>{partner.verificationStatus}</strong>
-            </div>
-          )}
-        </section>
+        {!isAdmin ? (
+          <section className="account-section">
+            <h2>Delivery partner</h2>
+            {!partner.exists ? (
+              <>
+                <p className="form-intro">Apply with a profile photo and campus ID. Vendor/customer screens will never receive your ID document.</p>
+                <Link className="primary-link" to="/partner/apply">Apply to become a partner</Link>
+              </>
+            ) : (
+              <div className="partner-status-row">
+                <span>Verification status</span>
+                <strong>{partner.verificationStatus}</strong>
+              </div>
+            )}
+          </section>
+        ) : null}
 
-        {user.role === 'ADMIN' ? (
+        {isAdmin ? (
           <section className="account-section">
             <h2>Admin</h2>
+            <p className="form-intro">Admin accounts are reserved for RouteBite operations and cannot participate as delivery partners.</p>
             <Link className="primary-link" to="/admin/partners">Review partner applications</Link>
           </section>
         ) : null}
