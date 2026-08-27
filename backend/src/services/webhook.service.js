@@ -7,7 +7,7 @@ import {
   WEBHOOK_PROCESSING_STATUS,
   WebhookEvent,
 } from '../models/webhook-event.model.js';
-import { runMatchingForOrder } from './matching.service.js';
+import { startOrDeferMatching } from './matching-orchestration.service.js';
 import { verifyRazorpayWebhookSignature } from './razorpay.service.js';
 import { AppError } from '../utils/app-error.js';
 
@@ -69,7 +69,7 @@ async function confirmCapturedPayment({ payment, providerPaymentId }) {
   const currentOrder = await Order.findById(orderId).select('status');
   if (currentOrder?.status === ORDER_STATUS.MATCHING) {
     try {
-      await runMatchingForOrder(orderId);
+      await startOrDeferMatching(orderId);
     } catch (error) {
       console.error('Webhook-confirmed payment could not start matching', {
         orderId: orderId.toString(),
