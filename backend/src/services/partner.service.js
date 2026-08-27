@@ -5,7 +5,6 @@ import {
 } from '../constants/partner.constants.js';
 import { Partner } from '../models/partner.model.js';
 import { UploadAsset } from '../models/upload-asset.model.js';
-import { User } from '../models/user.model.js';
 import { AppError } from '../utils/app-error.js';
 import { createAuthenticatedAssetUrl } from './upload.service.js';
 
@@ -134,7 +133,7 @@ export async function listPendingPartners() {
     verificationStatus: PARTNER_VERIFICATION_STATUS.PENDING,
   })
     .sort({ createdAt: 1 })
-    .populate('userId', 'name email phone phoneVerified')
+    .populate('userId', 'name email emailVerified phone phoneVerified')
     .lean();
 
   const assetIds = partners.flatMap((partner) => [
@@ -156,6 +155,7 @@ export async function listPendingPartners() {
         id: partner.userId._id.toString(),
         name: partner.userId.name,
         email: partner.userId.email,
+        emailVerified: partner.userId.emailVerified,
         phone: partner.userId.phone,
         phoneVerified: partner.userId.phoneVerified,
       },
@@ -171,7 +171,7 @@ export async function listPendingPartners() {
 }
 
 export async function approvePartner({ partnerId, adminUserId }) {
-  const partner = await Partner.findById(partnerId).populate('userId', 'phoneVerified');
+  const partner = await Partner.findById(partnerId).populate('userId', 'emailVerified');
 
   if (!partner) {
     throw new AppError('Partner application not found.', {
@@ -180,10 +180,10 @@ export async function approvePartner({ partnerId, adminUserId }) {
     });
   }
 
-  if (!partner.userId.phoneVerified) {
-    throw new AppError('The applicant must verify their phone before approval.', {
+  if (!partner.userId.emailVerified) {
+    throw new AppError('The applicant must verify their email before approval.', {
       statusCode: 422,
-      code: 'PARTNER_PHONE_NOT_VERIFIED',
+      code: 'PARTNER_EMAIL_NOT_VERIFIED',
     });
   }
 
