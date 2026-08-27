@@ -7,7 +7,10 @@ import {
   getCurrentUser,
   loginUser,
   registerUser,
+  requestPhoneOtp,
+  verifyPhoneOtp,
 } from '../services/auth.service.js';
+import { getPartnerCapabilityForUser } from '../services/partner.service.js';
 
 function cookieOptions() {
   return {
@@ -67,18 +70,43 @@ export function logout(req, res) {
 
 export async function me(req, res, next) {
   try {
-    const user = await getCurrentUser(req.auth.userId);
+    const [user, partner] = await Promise.all([
+      getCurrentUser(req.auth.userId),
+      getPartnerCapabilityForUser(req.auth.userId),
+    ]);
 
     res.status(200).json({
       success: true,
-      data: {
-        user,
-        partner: {
-          exists: false,
-          verificationStatus: null,
-          availabilityStatus: null,
-        },
-      },
+      data: { user, partner },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function requestPhoneVerification(req, res, next) {
+  try {
+    const result = await requestPhoneOtp(req.auth.userId);
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function verifyPhoneVerification(req, res, next) {
+  try {
+    const user = await verifyPhoneOtp({
+      userId: req.auth.userId,
+      otp: req.body.otp,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: { user },
     });
   } catch (error) {
     next(error);
