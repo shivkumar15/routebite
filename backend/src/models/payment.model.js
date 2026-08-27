@@ -45,6 +45,11 @@ const paymentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    activeAttempt: {
+      type: Boolean,
+      default: true,
+      required: true,
+    },
     amountPaise: {
       type: Number,
       required: true,
@@ -105,6 +110,10 @@ paymentSchema.index(
 paymentSchema.index(
   { providerPaymentId: 1 },
   { unique: true, partialFilterExpression: { providerPaymentId: { $type: 'string' } } },
+);
+paymentSchema.index(
+  { orderId: 1, activeAttempt: 1 },
+  { unique: true, partialFilterExpression: { activeAttempt: true } },
 );
 paymentSchema.index({ orderId: 1, createdAt: -1 });
 paymentSchema.index({ customerId: 1, createdAt: -1 });
