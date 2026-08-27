@@ -1,0 +1,251 @@
+.order-shell {
+  min-height: 100vh;
+  padding: 48px 20px 80px;
+  background: var(--color-background);
+}
+
+.order-form-card,
+.orders-card {
+  width: min(920px, 100%);
+  margin: 0 auto;
+  padding: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: 0 20px 60px rgba(75, 32, 48, 0.07);
+}
+
+.order-page-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+  margin-bottom: 28px;
+}
+
+.order-page-heading h1 {
+  margin: 4px 0 8px;
+}
+
+.order-heading-actions,
+.account-action-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.order-form {
+  display: grid;
+  gap: 20px;
+}
+
+.order-form label,
+.location-fieldset label {
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.order-form input,
+.order-form textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 12px 14px;
+  background: #fff;
+  color: var(--color-text);
+  font: inherit;
+}
+
+.order-form textarea {
+  resize: vertical;
+}
+
+.location-fieldset,
+.delivery-choice {
+  margin: 0;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.location-fieldset legend,
+.delivery-choice legend {
+  padding: 0 8px;
+  font-weight: 800;
+  color: var(--color-brand-dark);
+}
+
+.location-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.location-title-row p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.coordinate-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.optional-text,
+.prototype-note {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.field-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.compact-button {
+  padding: 9px 12px;
+}
+
+.delivery-choice {
+  display: grid;
+  gap: 10px;
+}
+
+.choice-row {
+  grid-template-columns: auto 1fr !important;
+  align-items: flex-start;
+  gap: 12px !important;
+  padding: 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-background);
+}
+
+.choice-row input {
+  width: auto;
+  margin-top: 3px;
+}
+
+.choice-row span {
+  display: grid;
+  gap: 2px;
+}
+
+.choice-row small {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.order-list {
+  display: grid;
+  gap: 16px;
+}
+
+.order-summary-card,
+.empty-order-state {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  background: #fff;
+}
+
+.order-summary-card h2,
+.empty-order-state h2 {
+  margin: 10px 0 6px;
+}
+
+.order-summary-card > p {
+  margin: 0 0 16px;
+  color: var(--color-text-muted);
+}
+
+.order-summary-topline,
+.order-summary-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.order-status-chip {
+  display: inline-flex;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: var(--color-brand-soft);
+  color: var(--color-brand-dark);
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.order-route-summary {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 14px;
+}
+
+.order-route-summary span:not(.route-arrow) {
+  display: grid;
+  gap: 3px;
+}
+
+.order-route-summary strong {
+  font-size: 12px;
+  color: var(--color-brand);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.route-arrow {
+  color: var(--color-accent);
+  font-weight: 900;
+}
+
+.empty-order-state {
+  text-align: center;
+  padding: 42px 20px;
+}
+
+@media (max-width: 700px) {
+  .order-shell {
+    padding: 24px 12px 48px;
+  }
+
+  .order-form-card,
+  .orders-card {
+    padding: 20px;
+  }
+
+  .order-page-heading,
+  .location-title-row,
+  .order-summary-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .coordinate-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .order-route-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .route-arrow {
+    transform: rotate(90deg);
+    width: fit-content;
+  }
+}

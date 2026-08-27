@@ -4,6 +4,8 @@ import LoginPage from './pages/auth/LoginPage.jsx';
 import RegisterPage from './pages/auth/RegisterPage.jsx';
 import AccountPage from './pages/customer/AccountPage.jsx';
 import HomePage from './pages/customer/HomePage.jsx';
+import OrderDraftPage from './pages/customer/OrderDraftPage.jsx';
+import OrdersPage from './pages/customer/OrdersPage.jsx';
 import PartnerApplyPage from './pages/partner/PartnerApplyPage.jsx';
 import PartnerDashboardPage from './pages/partner/PartnerDashboardPage.jsx';
 import AdminRoute from './routes/AdminRoute.jsx';
@@ -21,6 +23,30 @@ export default function App() {
         element={
           <ProtectedRoute>
             <AccountPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/orders"
+        element={
+          <ProtectedRoute>
+            <OrdersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/orders/new"
+        element={
+          <ProtectedRoute>
+            <OrderDraftPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/orders/:orderId/edit"
+        element={
+          <ProtectedRoute>
+            <OrderDraftPage />
           </ProtectedRoute>
         }
       />
