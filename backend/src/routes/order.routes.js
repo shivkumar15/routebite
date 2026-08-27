@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { detail as matchingDetail } from '../controllers/matching.controller.js';
 import { create, detail, list, update } from '../controllers/order.controller.js';
 import {
   createPayment,
@@ -23,6 +24,7 @@ router.get('/', list);
 router.post('/:orderId/payment', createPaymentValidators, validateRequest, createPayment);
 router.get('/:orderId/payment', paymentStatusValidators, validateRequest, paymentStatus);
 router.post('/:orderId/payment/verify', verifyPaymentValidators, validateRequest, verifyPayment);
+router.get('/:orderId/matching', orderIdValidators, validateRequest, matchingDetail);
 router.get('/:orderId', orderIdValidators, validateRequest, detail);
 router.patch('/:orderId', [...orderIdValidators, ...orderDraftValidators], validateRequest, update);
 
