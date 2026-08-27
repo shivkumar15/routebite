@@ -27,7 +27,16 @@ export default function RouteStoryIllustration() {
           <path d="M66 18c-14-18 12-18 0-35" />
           <path d="M85 15c-12-16 11-17 1-30" />
         </g>
-        <text className="stall-label" x="102" y="99" textAnchor="middle">LOCAL FAVOURITE</text>
+        <text
+          className="stall-label"
+          x="102"
+          y="117"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          style={{ fill: '#FFF7EF', fontSize: '8.5px', letterSpacing: '1.25px' }}
+        >
+          LOCAL FAVOURITE
+        </text>
       </g>
 
       <g className="story-destination" transform="translate(468 250)">
@@ -41,7 +50,16 @@ export default function RouteStoryIllustration() {
           <rect x="72" y="78" width="18" height="18" rx="4" />
         </g>
         <rect className="building-door" x="50" y="105" width="24" height="34" rx="5" />
-        <text className="building-label" x="61" y="-20" textAnchor="middle">YOU</text>
+        <text
+          className="building-label"
+          x="61"
+          y="6"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          style={{ fill: '#FFF7EF', fontSize: '9px', letterSpacing: '1.2px' }}
+        >
+          YOU
+        </text>
       </g>
 
       <path
