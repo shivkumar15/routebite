@@ -6,6 +6,7 @@ import {
 } from '../constants/payment.constants.js';
 import { Order } from '../models/order.model.js';
 import { Payment } from '../models/payment.model.js';
+import { runMatchingForOrder } from './matching.service.js';
 import { calculateCheckoutPricing } from './pricing.service.js';
 import {
   createRazorpayOrder,
@@ -86,6 +87,28 @@ async function failPaymentAttempt(paymentId, reason) {
       },
     },
   );
+}
+
+async function runMatchingSafely(orderId) {
+  try {
+    return await runMatchingForOrder(orderId);
+  } catch (error) {
+    console.error('Automatic matching failed after payment confirmation', {
+      orderId: orderId.toString(),
+      message: error.message,
+    });
+    return null;
+  }
+}
+
+async function paymentConfirmationResponse(payment, orderId) {
+  const matching = await runMatchingSafely(orderId);
+  const currentOrder = await Order.findById(orderId).select('status');
+  return {
+    payment: toSafePayment(payment),
+    orderStatus: currentOrder?.status ?? ORDER_STATUS.MATCHING,
+    matching,
+  };
 }
 
 export async function createOrReusePaymentAttempt({ customerId, orderId, idempotencyKey }) {
@@ -237,7 +260,7 @@ export async function verifyAndConfirmPayment({
         code: 'PAYMENT_ALREADY_CONFIRMED',
       });
     }
-    return { payment: toSafePayment(payment), orderStatus: ORDER_STATUS.MATCHING };
+    return paymentConfirmationResponse(payment, orderId);
   }
 
   if (!ACTIVE_PAYMENT_STATUSES.includes(payment.status) || !payment.activeAttempt) {
@@ -327,10 +350,7 @@ export async function verifyAndConfirmPayment({
     await session.endSession();
   }
 
-  return {
-    payment: toSafePayment(confirmedPayment),
-    orderStatus: ORDER_STATUS.MATCHING,
-  };
+  return paymentConfirmationResponse(confirmedPayment, orderId);
 }
 
 export async function getLatestCustomerPayment({ customerId, orderId }) {
