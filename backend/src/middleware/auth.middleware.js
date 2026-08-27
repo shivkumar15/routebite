@@ -62,6 +62,13 @@ export function requireAdmin(req, res, next) {
 
 export async function requireApprovedPartner(req, res, next) {
   try {
+    if (req.auth?.role === USER_ROLES.ADMIN) {
+      throw new AppError('Administrator accounts cannot use delivery-partner capabilities.', {
+        statusCode: 403,
+        code: 'ADMIN_PARTNER_CONFLICT',
+      });
+    }
+
     const partner = await Partner.findOne({ userId: req.auth.userId }).select(
       '_id verificationStatus',
     );
