@@ -6,6 +6,7 @@ import {
 } from '../constants/payment.constants.js';
 import { Order } from '../models/order.model.js';
 import { Payment } from '../models/payment.model.js';
+import { toCustomerMatchingSummary } from './matching-response.service.js';
 import { runMatchingForOrder } from './matching.service.js';
 import { calculateCheckoutPricing } from './pricing.service.js';
 import {
@@ -107,7 +108,7 @@ async function paymentConfirmationResponse(payment, orderId) {
   return {
     payment: toSafePayment(payment),
     orderStatus: currentOrder?.status ?? ORDER_STATUS.MATCHING,
-    matching,
+    matching: toCustomerMatchingSummary(matching),
   };
 }
 
