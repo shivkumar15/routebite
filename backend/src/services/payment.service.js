@@ -6,8 +6,8 @@ import {
 } from '../constants/payment.constants.js';
 import { Order } from '../models/order.model.js';
 import { Payment } from '../models/payment.model.js';
+import { startOrDeferMatching } from './matching-orchestration.service.js';
 import { toCustomerMatchingSummary } from './matching-response.service.js';
-import { runMatchingForOrder } from './matching.service.js';
 import { calculateCheckoutPricing } from './pricing.service.js';
 import {
   createRazorpayOrder,
@@ -92,7 +92,7 @@ async function failPaymentAttempt(paymentId, reason) {
 
 async function runMatchingSafely(orderId) {
   try {
-    return await runMatchingForOrder(orderId);
+    return await startOrDeferMatching(orderId);
   } catch (error) {
     console.error('Automatic matching failed after payment confirmation', {
       orderId: orderId.toString(),
