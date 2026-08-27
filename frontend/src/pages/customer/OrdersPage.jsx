@@ -38,7 +38,7 @@ export default function OrdersPage() {
           <div>
             <p className="eyebrow">Your RouteBite requests</p>
             <h1>Food requests</h1>
-            <p className="form-intro">Phase 4 stores these as drafts. Payment and matching come in the next phases.</p>
+            <p className="form-intro">Draft requests can now enter Razorpay Test Mode checkout. Matching begins only after backend payment confirmation.</p>
           </div>
           <div className="order-heading-actions">
             <Link className="secondary-link" to="/account">Account</Link>
@@ -58,28 +58,44 @@ export default function OrdersPage() {
         ) : null}
 
         <div className="order-list">
-          {orders.map((order) => (
-            <article className="order-summary-card" key={order.id}>
-              <div className="order-summary-topline">
-                <span className="order-status-chip">{order.status}</span>
-                <span>{formatDate(order.createdAt)}</span>
-              </div>
-              <h2>{order.vendorDisplayName}</h2>
-              <p>{order.requestedItems}</p>
-              <div className="order-route-summary">
-                <span><strong>Pickup</strong>{order.pickup.label}</span>
-                <span className="route-arrow">→</span>
-                <span><strong>Drop</strong>{order.drop.label}</span>
-              </div>
-              <div className="order-summary-footer">
-                <span>{order.deliveryType === 'ASAP' ? 'ASAP' : `Scheduled · ${formatDate(order.deliveryWindowStart)}`}</span>
-                <strong>{formatMoney(order.estimatedFoodCostPaise)} est.</strong>
-              </div>
-              {order.status === 'DRAFT' ? (
-                <Link className="secondary-link" to={`/orders/${order.id}/edit`}>Edit draft</Link>
-              ) : null}
-            </article>
-          ))}
+          {orders.map((order) => {
+            const canPay = ['DRAFT', 'AWAITING_PAYMENT'].includes(order.status);
+            const paymentConfirmed = order.status === 'MATCHING';
+
+            return (
+              <article className="order-summary-card" key={order.id}>
+                <div className="order-summary-topline">
+                  <span className="order-status-chip">{order.status}</span>
+                  <span>{formatDate(order.createdAt)}</span>
+                </div>
+                <h2>{order.vendorDisplayName}</h2>
+                <p>{order.requestedItems}</p>
+                <div className="order-route-summary">
+                  <span><strong>Pickup</strong>{order.pickup.label}</span>
+                  <span className="route-arrow">→</span>
+                  <span><strong>Drop</strong>{order.drop.label}</span>
+                </div>
+                <div className="order-summary-footer">
+                  <span>{order.deliveryType === 'ASAP' ? 'ASAP' : `Scheduled · ${formatDate(order.deliveryWindowStart)}`}</span>
+                  <strong>{formatMoney(order.pricing?.estimatedCustomerTotalPaise ?? order.estimatedFoodCostPaise)} checkout est.</strong>
+                </div>
+
+                <div className="order-card-actions">
+                  {order.status === 'DRAFT' ? (
+                    <Link className="secondary-link" to={`/orders/${order.id}/edit`}>Edit draft</Link>
+                  ) : null}
+                  {canPay ? (
+                    <Link className="primary-link" to={`/orders/${order.id}/checkout`}>
+                      {order.status === 'DRAFT' ? 'Review & pay' : 'Continue payment'}
+                    </Link>
+                  ) : null}
+                  {paymentConfirmed ? (
+                    <Link className="secondary-link" to={`/orders/${order.id}/checkout`}>Payment details</Link>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
     </main>
