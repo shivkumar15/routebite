@@ -56,6 +56,21 @@ export default function PartnerApplyPage() {
     }
   }
 
+  if (user.role === 'ADMIN') {
+    return (
+      <main className="app-shell">
+        <section className="account-card">
+          <p className="eyebrow">RouteBite admin</p>
+          <h1>Partner onboarding is unavailable</h1>
+          <p className="form-intro">
+            Administrator accounts are reserved for RouteBite operations and cannot participate as delivery partners.
+          </p>
+          <Link className="secondary-link" to="/account">Back to account</Link>
+        </section>
+      </main>
+    );
+  }
+
   if (partner.exists) {
     return (
       <main className="app-shell">
