@@ -1,20 +1,13 @@
-import { toCustomerMatchingSummary } from '../services/matching-response.service.js';
-import { getCustomerMatchingState } from '../services/matching.service.js';
+import { getCustomerMatchingSummary } from '../services/matching-read.service.js';
 
 export async function detail(req, res, next) {
   try {
-    const state = await getCustomerMatchingState({
+    const state = await getCustomerMatchingSummary({
       customerId: req.auth.userId,
       orderId: req.params.orderId,
     });
 
-    res.status(200).json({
-      success: true,
-      data: {
-        orderStatus: state.orderStatus,
-        matching: toCustomerMatchingSummary(state.matching),
-      },
-    });
+    res.status(200).json({ success: true, data: state });
   } catch (error) {
     next(error);
   }
