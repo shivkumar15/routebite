@@ -21,6 +21,7 @@
     "jsonwebtoken": "latest",
     "mongoose": "latest",
     "multer": "latest",
+    "resend": "latest",
     "socket.io": "latest"
   },
   "devDependencies": {
