@@ -58,4 +58,18 @@ describe('order route contract', () => {
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('AUTH_REQUIRED');
   });
+
+  test('price increase approval requires authentication', async () => {
+    const response = await request(app)
+      .post('/api/v1/orders/507f1f77bcf86cd799439011/price-adjustment/approve');
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
+  test('price increase rejection requires authentication', async () => {
+    const response = await request(app)
+      .post('/api/v1/orders/507f1f77bcf86cd799439011/price-adjustment/reject');
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
 });
