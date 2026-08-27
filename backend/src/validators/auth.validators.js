@@ -17,7 +17,7 @@ export const registerValidators = [
     .trim()
     .isEmail()
     .withMessage('Enter a valid email address.')
-    .normalizeEmail(),
+    .customSanitizer((value) => value.toLowerCase()),
   body('phone')
     .isString()
     .withMessage('Phone is required.')
