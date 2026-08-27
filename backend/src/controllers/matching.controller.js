@@ -1,3 +1,4 @@
+import { toCustomerMatchingSummary } from '../services/matching-response.service.js';
 import { getCustomerMatchingState } from '../services/matching.service.js';
 
 export async function detail(req, res, next) {
@@ -7,7 +8,13 @@ export async function detail(req, res, next) {
       orderId: req.params.orderId,
     });
 
-    res.status(200).json({ success: true, data: state });
+    res.status(200).json({
+      success: true,
+      data: {
+        orderStatus: state.orderStatus,
+        matching: toCustomerMatchingSummary(state.matching),
+      },
+    });
   } catch (error) {
     next(error);
   }
