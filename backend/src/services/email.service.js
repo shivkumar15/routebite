@@ -20,6 +20,14 @@ function verificationEmailHtml(otp) {
   `;
 }
 
+function logDevelopmentOtp(email, otp, reason = null) {
+  if (reason) {
+    console.warn(`Resend unavailable in development: ${reason}`);
+  }
+
+  console.log(`RouteBite development email OTP for ${maskEmail(email)}: ${otp}`);
+}
+
 export async function sendEmailVerificationOtp({ email, otp }) {
   if (!env.resend.apiKey) {
     if (env.nodeEnv === 'production') {
@@ -29,30 +37,61 @@ export async function sendEmailVerificationOtp({ email, otp }) {
       });
     }
 
-    console.log(`RouteBite development email OTP for ${maskEmail(email)}: ${otp}`);
+    logDevelopmentOtp(email, otp, 'RESEND_API_KEY is not configured');
     return { delivery: 'console' };
   }
 
   const resend = new Resend(env.resend.apiKey);
-  const { error } = await resend.emails.send({
-    from: env.resend.fromEmail,
-    to: [email],
-    subject: 'Your RouteBite verification code',
-    text: `Your RouteBite verification code is ${otp}. It expires in 5 minutes.`,
-    html: verificationEmailHtml(otp),
-  });
 
-  if (error) {
-    console.error('Resend email delivery failed', {
-      name: error.name,
-      message: error.message,
+  try {
+    const { error } = await resend.emails.send({
+      from: env.resend.fromEmail,
+      to: [email],
+      subject: 'Your RouteBite verification code',
+      text: `Your RouteBite verification code is ${otp}. It expires in 5 minutes.`,
+      html: verificationEmailHtml(otp),
     });
+
+    if (error) {
+      const providerMessage = error.message ?? 'Unknown Resend error';
+
+      console.error('Resend email delivery failed', {
+        name: error.name,
+        message: providerMessage,
+      });
+
+      if (env.nodeEnv !== 'production') {
+        logDevelopmentOtp(email, otp, providerMessage);
+        return { delivery: 'console' };
+      }
+
+      throw new AppError('We could not send the verification email. Please try again.', {
+        statusCode: 502,
+        code: 'EMAIL_PROVIDER_FAILED',
+      });
+    }
+
+    return { delivery: 'email' };
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    const providerMessage = error?.message ?? 'Unknown Resend request error';
+
+    console.error('Resend email request failed', {
+      name: error?.name,
+      message: providerMessage,
+    });
+
+    if (env.nodeEnv !== 'production') {
+      logDevelopmentOtp(email, otp, providerMessage);
+      return { delivery: 'console' };
+    }
 
     throw new AppError('We could not send the verification email. Please try again.', {
       statusCode: 502,
       code: 'EMAIL_PROVIDER_FAILED',
     });
   }
-
-  return { delivery: 'email' };
 }
