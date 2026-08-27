@@ -22,11 +22,15 @@ export default function AccountPage() {
     setError('');
     setMessage('');
     try {
-      await api.post('/auth/phone-otp/request');
+      const { data } = await api.post('/auth/email-otp/request');
       setOtpRequested(true);
-      setMessage('Development code generated. Check the backend terminal for the 6-digit OTP.');
+      setMessage(
+        data.data.delivery === 'email'
+          ? `Verification code sent to ${user.email}.`
+          : 'Development fallback active. Check the backend terminal for the 6-digit email OTP.',
+      );
     } catch (requestError) {
-      setError(requestError.response?.data?.error?.message ?? 'Could not generate a verification code.');
+      setError(requestError.response?.data?.error?.message ?? 'Could not send a verification code.');
     } finally {
       setBusy(false);
     }
@@ -38,11 +42,11 @@ export default function AccountPage() {
     setError('');
     setMessage('');
     try {
-      await api.post('/auth/phone-otp/verify', { otp });
+      await api.post('/auth/email-otp/verify', { otp });
       await refreshSession();
       setOtp('');
       setOtpRequested(false);
-      setMessage('Phone verified successfully.');
+      setMessage('Email verified successfully.');
     } catch (requestError) {
       setError(requestError.response?.data?.error?.message ?? 'Could not verify the code.');
     } finally {
@@ -63,18 +67,20 @@ export default function AccountPage() {
 
         <dl className="account-details">
           <div><dt>Email</dt><dd>{user.email}</dd></div>
+          <div><dt>Email verified</dt><dd>{user.emailVerified ? 'Yes' : 'Not yet'}</dd></div>
           <div><dt>Phone</dt><dd>{user.phone}</dd></div>
-          <div><dt>Phone verified</dt><dd>{user.phoneVerified ? 'Yes' : 'Not yet'}</dd></div>
           <div><dt>Role</dt><dd>{user.role}</dd></div>
         </dl>
 
-        {!user.phoneVerified ? (
+        {!user.emailVerified ? (
           <section className="account-section">
-            <h2>Verify your phone</h2>
-            <p className="form-intro">For local development, RouteBite prints the OTP only in the backend terminal.</p>
+            <h2>Verify your email</h2>
+            <p className="form-intro">
+              RouteBite sends a 6-digit code to your account email. Email verification is required before a partner application can be approved.
+            </p>
             {!otpRequested ? (
               <button className="primary-button" type="button" disabled={busy} onClick={requestOtp}>
-                Generate verification code
+                Send verification code
               </button>
             ) : (
               <form className="inline-form" onSubmit={verifyOtp}>
@@ -82,6 +88,7 @@ export default function AccountPage() {
                   value={otp}
                   onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
                   inputMode="numeric"
+                  autoComplete="one-time-code"
                   placeholder="6-digit OTP"
                   pattern="\d{6}"
                   required
