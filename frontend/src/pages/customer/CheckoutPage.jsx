@@ -9,6 +9,10 @@ function formatMoney(paise) {
   return `₹${(Number(paise) / 100).toFixed(2)}`;
 }
 
+function formatDate(value) {
+  return value ? new Date(value).toLocaleString() : '';
+}
+
 function loadRazorpayCheckout() {
   if (window.Razorpay) return Promise.resolve();
 
@@ -96,7 +100,7 @@ export default function CheckoutPage() {
     setPayment(data.data.payment);
     setMatching(data.data.matching ?? null);
     await loadState();
-    setMessage('Test payment confirmed by RouteBite. Matching has started automatically.');
+    setMessage('Test payment confirmed by RouteBite. Matching orchestration has started.');
   }
 
   async function handlePay() {
@@ -199,6 +203,7 @@ export default function CheckoutPage() {
   const pricing = order.pricing;
   const confirmed = payment?.status === 'PAYMENT_CONFIRMED';
   const payable = ['DRAFT', 'AWAITING_PAYMENT'].includes(order.status);
+  const waitingForHorizon = matching?.status === 'WAITING_FOR_HORIZON';
   const candidatesReady = matching?.status === 'CANDIDATES_READY';
   const noCandidates = order.status === 'MATCHING_FAILED' || matching?.status === 'NO_CANDIDATES';
 
@@ -246,6 +251,15 @@ export default function CheckoutPage() {
           </div>
         ) : null}
 
+        {confirmed && waitingForHorizon ? (
+          <div className="checkout-success-panel">
+            <strong>Payment confirmed — matching scheduled</strong>
+            <p>
+              This is a future delivery, so RouteBite will start live matching around {formatDate(matching.resumeAt)} instead of failing it hours too early.
+            </p>
+          </div>
+        ) : null}
+
         {confirmed && candidatesReady ? (
           <div className="checkout-success-panel">
             <strong>Eligible partners found</strong>
@@ -255,7 +269,7 @@ export default function CheckoutPage() {
           </div>
         ) : null}
 
-        {confirmed && !candidatesReady && !noCandidates ? (
+        {confirmed && !waitingForHorizon && !candidatesReady && !noCandidates ? (
           <div className="checkout-success-panel">
             <strong>Payment confirmed — finding a partner</strong>
             <p>RouteBite is evaluating verified nearby and on-my-way partners against this delivery window.</p>
