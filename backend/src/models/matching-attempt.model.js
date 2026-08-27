@@ -35,6 +35,7 @@ const matchingAttemptSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    resumeAt: { type: Date, default: null, index: true },
     routeSource: { type: String, default: null },
     discoveredCandidateCount: { type: Number, default: 0, min: 0 },
     eligibleCandidateCount: { type: Number, default: 0, min: 0 },
@@ -52,6 +53,7 @@ const matchingAttemptSchema = new mongoose.Schema(
 
 matchingAttemptSchema.index({ orderId: 1, attemptNumber: 1 }, { unique: true });
 matchingAttemptSchema.index({ orderId: 1, createdAt: -1 });
+matchingAttemptSchema.index({ status: 1, resumeAt: 1 });
 matchingAttemptSchema.index(
   { orderId: 1, status: 1 },
   {
