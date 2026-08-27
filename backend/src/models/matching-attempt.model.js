@@ -52,5 +52,12 @@ const matchingAttemptSchema = new mongoose.Schema(
 
 matchingAttemptSchema.index({ orderId: 1, attemptNumber: 1 }, { unique: true });
 matchingAttemptSchema.index({ orderId: 1, createdAt: -1 });
+matchingAttemptSchema.index(
+  { orderId: 1, status: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: MATCHING_ATTEMPT_STATUS.RUNNING },
+  },
+);
 
 export const MatchingAttempt = mongoose.model('MatchingAttempt', matchingAttemptSchema);
