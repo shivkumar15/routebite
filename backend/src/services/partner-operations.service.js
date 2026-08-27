@@ -1,0 +1,109 @@
+import {
+  PARTNER_AVAILABILITY_STATUS,
+  PARTNER_OPERATION_LIMITS,
+  PARTNER_VERIFICATION_STATUS,
+  TRIP_STATUS,
+} from '../constants/partner.constants.js';
+import { Partner } from '../models/partner.model.js';
+import { Trip } from '../models/trip.model.js';
+import { AppError } from '../utils/app-error.js';
+
+function toOperationalPartner(partner) {
+  const coordinates = partner.currentLocation?.coordinates;
+
+  return {
+    id: partner._id.toString(),
+    verificationStatus: partner.verificationStatus,
+    availabilityStatus: partner.availabilityStatus,
+    currentLocation: coordinates
+      ? {
+          longitude: coordinates[0],
+          latitude: coordinates[1],
+          accuracyMeters: partner.locationAccuracyMeters ?? null,
+          updatedAt: partner.locationUpdatedAt,
+        }
+      : null,
+    activeOrderId: partner.activeOrderId?.toString?.() ?? null,
+  };
+}
+
+async function getApprovedPartner(partnerId) {
+  const partner = await Partner.findById(partnerId);
+
+  if (!partner || partner.verificationStatus !== PARTNER_VERIFICATION_STATUS.APPROVED) {
+    throw new AppError('Approved partner access required.', {
+      statusCode: 403,
+      code: 'APPROVED_PARTNER_REQUIRED',
+    });
+  }
+
+  return partner;
+}
+
+function locationIsFresh(partner) {
+  if (!partner.currentLocation || !partner.locationUpdatedAt) return false;
+
+  const ageMs = Date.now() - partner.locationUpdatedAt.getTime();
+  return ageMs <= PARTNER_OPERATION_LIMITS.MAX_LOCATION_AGE_SECONDS * 1000;
+}
+
+export async function updatePartnerLocation({ partnerId, payload }) {
+  const partner = await getApprovedPartner(partnerId);
+
+  partner.currentLocation = {
+    type: 'Point',
+    // GeoJSON always stores longitude first.
+    coordinates: [payload.longitude, payload.latitude],
+  };
+  partner.locationAccuracyMeters = payload.accuracyMeters ?? null;
+  partner.locationUpdatedAt = new Date();
+  await partner.save();
+
+  return toOperationalPartner(partner);
+}
+
+export async function updatePartnerAvailability({ partnerId, status }) {
+  const partner = await getApprovedPartner(partnerId);
+
+  if (partner.availabilityStatus === status) {
+    return toOperationalPartner(partner);
+  }
+
+  if (partner.activeOrderId) {
+    throw new AppError('Availability cannot be changed while you have an active order.', {
+      statusCode: 409,
+      code: 'PARTNER_HAS_ACTIVE_ORDER',
+    });
+  }
+
+  if (status === PARTNER_AVAILABILITY_STATUS.AVAILABLE_NOW) {
+    if (!locationIsFresh(partner)) {
+      throw new AppError('Update your current location before going available.', {
+        statusCode: 422,
+        code: 'FRESH_LOCATION_REQUIRED',
+      });
+    }
+
+    const activeTripExists = await Trip.exists({
+      partnerId: partner._id,
+      status: TRIP_STATUS.ACTIVE,
+    });
+
+    if (activeTripExists) {
+      throw new AppError('End your active trip before switching to Available Now.', {
+        statusCode: 409,
+        code: 'ACTIVE_TRIP_CONFLICT',
+      });
+    }
+  }
+
+  partner.availabilityStatus = status;
+  await partner.save();
+
+  return toOperationalPartner(partner);
+}
+
+export async function getPartnerOperationalState(partnerId) {
+  const partner = await getApprovedPartner(partnerId);
+  return toOperationalPartner(partner);
+}
