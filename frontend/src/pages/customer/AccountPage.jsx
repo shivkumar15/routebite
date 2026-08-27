@@ -106,6 +106,17 @@ export default function AccountPage() {
 
         {!isAdmin ? (
           <section className="account-section">
+            <h2>Get local food</h2>
+            <p className="form-intro">Create a request for a local food place even when that seller is not registered on RouteBite.</p>
+            <div className="account-action-row">
+              <Link className="primary-link" to="/orders/new">Create food request</Link>
+              <Link className="secondary-link" to="/orders">My requests</Link>
+            </div>
+          </section>
+        ) : null}
+
+        {!isAdmin ? (
+          <section className="account-section">
             <h2>Delivery partner</h2>
             {!partner.exists ? (
               <>
