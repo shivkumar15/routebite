@@ -49,7 +49,7 @@ export const loginValidators = [
     .withMessage('Password is required.'),
 ];
 
-export const phoneOtpValidators = [
+export const otpValidators = [
   body('otp')
     .isString()
     .withMessage('Verification code is required.')
@@ -58,3 +58,6 @@ export const phoneOtpValidators = [
     .matches(/^\d{6}$/)
     .withMessage('Verification code must contain exactly 6 digits.'),
 ];
+
+export const phoneOtpValidators = otpValidators;
+export const emailOtpValidators = otpValidators;
