@@ -5,7 +5,9 @@ import RegisterPage from './pages/auth/RegisterPage.jsx';
 import AccountPage from './pages/customer/AccountPage.jsx';
 import HomePage from './pages/customer/HomePage.jsx';
 import PartnerApplyPage from './pages/partner/PartnerApplyPage.jsx';
+import PartnerDashboardPage from './pages/partner/PartnerDashboardPage.jsx';
 import AdminRoute from './routes/AdminRoute.jsx';
+import PartnerRoute from './routes/PartnerRoute.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
 export default function App() {
@@ -28,6 +30,14 @@ export default function App() {
           <ProtectedRoute>
             <PartnerApplyPage />
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/partner"
+        element={
+          <PartnerRoute>
+            <PartnerDashboardPage />
+          </PartnerRoute>
         }
       />
       <Route
