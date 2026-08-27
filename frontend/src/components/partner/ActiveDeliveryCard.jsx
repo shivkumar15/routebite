@@ -14,12 +14,17 @@ function rupeesToPaise(value) {
   return Number.isSafeInteger(paise) ? paise : null;
 }
 
-export default function ActiveDeliveryCard({ order, onOrderChange }) {
+export default function ActiveDeliveryCard({ order: initialOrder }) {
+  const [order, setOrder] = useState(initialOrder);
   const [actualPrice, setActualPrice] = useState('');
   const [receiptFile, setReceiptFile] = useState(null);
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    setOrder(initialOrder);
+  }, [initialOrder]);
 
   useEffect(() => {
     setActualPrice(
@@ -37,7 +42,14 @@ export default function ActiveDeliveryCard({ order, onOrderChange }) {
       if (payload?.orderId !== order.id) return;
       try {
         const { data } = await api.get('/partner/active-order');
-        onOrderChange?.(data.data.order);
+        if (!data.data.order) {
+          window.location.reload();
+          return;
+        }
+        setOrder(data.data.order);
+        if (payload.status === 'PARTNER_TO_PICKUP') {
+          setMessage('Customer approved the higher food price.');
+        }
       } catch {
         // REST remains authoritative; a later dashboard refresh can recover.
       }
@@ -52,7 +64,7 @@ export default function ActiveDeliveryCard({ order, onOrderChange }) {
       socket.off('price:rejected', refreshForPriceEvent);
       socket.off('price:timed-out', refreshForPriceEvent);
     };
-  }, [onOrderChange, order]);
+  }, [order]);
 
   if (!order) return null;
 
@@ -62,7 +74,7 @@ export default function ActiveDeliveryCard({ order, onOrderChange }) {
     setMessage('');
     try {
       const { data } = await api.post(path);
-      onOrderChange?.(data.data.order);
+      setOrder(data.data.order);
       setMessage(successMessage);
     } catch (requestError) {
       setError(
@@ -100,7 +112,7 @@ export default function ActiveDeliveryCard({ order, onOrderChange }) {
         actualFoodCostPaise,
         receiptAssetId,
       });
-      onOrderChange?.(data.data.order);
+      setOrder(data.data.order);
       setMessage(
         data.data.order.status === 'PRICE_CONFIRMATION_REQUIRED'
           ? 'Higher price sent to the customer for approval.'
