@@ -3,6 +3,7 @@ import PartnerReviewPage from './pages/admin/PartnerReviewPage.jsx';
 import LoginPage from './pages/auth/LoginPage.jsx';
 import RegisterPage from './pages/auth/RegisterPage.jsx';
 import AccountPage from './pages/customer/AccountPage.jsx';
+import CheckoutPage from './pages/customer/CheckoutPage.jsx';
 import HomePage from './pages/customer/HomePage.jsx';
 import OrderDraftPage from './pages/customer/OrderDraftPage.jsx';
 import OrdersPage from './pages/customer/OrdersPage.jsx';
@@ -47,6 +48,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <OrderDraftPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/orders/:orderId/checkout"
+        element={
+          <ProtectedRoute>
+            <CheckoutPage />
           </ProtectedRoute>
         }
       />
