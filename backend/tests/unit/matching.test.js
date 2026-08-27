@@ -8,6 +8,9 @@ const { MATCHING_PARTNER_MODE, MATCHING_REJECTION_REASON } = await import(
   '../../src/constants/matching.constants.js'
 );
 const { TRIP_STATUS } = await import('../../src/constants/partner.constants.js');
+const { getScheduledMatchingResumeAt } = await import(
+  '../../src/services/matching-orchestration.service.js'
+);
 const { evaluateTripGeometry, rankCandidates } = await import(
   '../../src/services/matching.service.js'
 );
@@ -52,6 +55,13 @@ describe('Phase 6 matching rules', () => {
       eligible: false,
       reason: MATCHING_REJECTION_REASON.PICKUP_ALREADY_PASSED,
     });
+  });
+
+  test('scheduled customer matching begins sixty minutes before the delivery window', () => {
+    const resumeAt = getScheduledMatchingResumeAt({
+      deliveryWindowStart: new Date('2026-08-27T18:00:00.000Z'),
+    });
+    expect(resumeAt.toISOString()).toBe('2026-08-27T17:00:00.000Z');
   });
 
   test('ranking prefers materially earlier delivery', () => {
