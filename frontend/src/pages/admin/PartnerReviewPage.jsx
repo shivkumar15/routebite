@@ -89,10 +89,10 @@ export default function PartnerReviewPage() {
                 <div>
                   <h2>{partner.applicant.name}</h2>
                   <p>{partner.applicant.email}</p>
-                  <p>{partner.applicant.phone}</p>
-                  <p className={partner.applicant.phoneVerified ? 'status-good' : 'status-warning'}>
-                    {partner.applicant.phoneVerified ? 'Phone verified' : 'Phone not verified'}
+                  <p className={partner.applicant.emailVerified ? 'status-good' : 'status-warning'}>
+                    {partner.applicant.emailVerified ? 'Email verified' : 'Email not verified'}
                   </p>
+                  <p>{partner.applicant.phone}</p>
                   <dl className="account-details compact-details">
                     <div><dt>College</dt><dd>{partner.collegeName}</dd></div>
                     <div><dt>Enrollment</dt><dd>{partner.enrollmentNumber}</dd></div>
@@ -119,7 +119,7 @@ export default function PartnerReviewPage() {
                 <button
                   className="primary-button"
                   type="button"
-                  disabled={busyId === partner.id || !partner.applicant.phoneVerified}
+                  disabled={busyId === partner.id || !partner.applicant.emailVerified}
                   onClick={() => handleApprove(partner.id)}
                 >
                   Approve
