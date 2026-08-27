@@ -1,0 +1,23 @@
+:root {
+  --color-background: #F7F2E8;
+  --color-surface: #FFFDF8;
+  --color-brand: #5B2434;
+  --color-accent: #E47A2E;
+  --color-text: #1F1E1B;
+  --color-text-muted: #706B62;
+  --color-border: #DED6C9;
+  --color-success: #2F7657;
+  --color-warning: #C58B26;
+  --color-danger: #B6403A;
+
+  --radius-control: 10px;
+  --radius-card: 14px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+}
