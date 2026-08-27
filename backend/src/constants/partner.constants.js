@@ -25,4 +25,5 @@ export const PARTNER_OPERATION_LIMITS = Object.freeze({
 export const UPLOAD_PURPOSE = Object.freeze({
   PROFILE_PHOTO: 'PROFILE_PHOTO',
   COLLEGE_ID: 'COLLEGE_ID',
+  ORDER_RECEIPT: 'ORDER_RECEIPT',
 });
