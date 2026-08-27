@@ -4,6 +4,7 @@ import { USER_ROLES } from '../constants/auth.constants.js';
 const phoneVerificationSchema = new mongoose.Schema(
   {
     otpHash: { type: String, default: null, select: false },
+    requestedAt: { type: Date, default: null },
     expiresAt: { type: Date, default: null },
     attempts: { type: Number, default: 0, min: 0 },
   },
