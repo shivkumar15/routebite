@@ -77,7 +77,7 @@ export default function PartnerApplyPage() {
         <h1>Verify your campus identity</h1>
         <p className="form-intro">
           We use a profile photo and college ID image only for partner review. Do not upload Aadhaar.
-          {user.phoneVerified ? ' Your phone is already verified.' : ' Verify your phone from your account before admin approval.'}
+          {user.emailVerified ? ' Your email is already verified.' : ' Verify your email from your account before admin approval.'}
         </p>
 
         <form className="auth-form" onSubmit={handleSubmit}>
