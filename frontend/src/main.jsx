@@ -10,6 +10,7 @@ import './styles/partner.css';
 import './styles/order.css';
 import './styles/matching.css';
 import './styles/offer.css';
+import './styles/active-delivery.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
