@@ -22,7 +22,7 @@ function waitingAttemptToResult(attempt) {
   };
 }
 
-function scheduledResumeAt(order) {
+export function getScheduledMatchingResumeAt(order) {
   return new Date(
     new Date(order.deliveryWindowStart).getTime() -
       MATCHING_LIMITS.SCHEDULED_MATCHING_LEAD_MINUTES * 60 * 1000,
@@ -34,7 +34,7 @@ export async function startOrDeferMatching(orderId, now = new Date()) {
   if (!order || order.status !== ORDER_STATUS.MATCHING) return null;
 
   if (order.deliveryType === DELIVERY_TYPE.SCHEDULED) {
-    const resumeAt = scheduledResumeAt(order);
+    const resumeAt = getScheduledMatchingResumeAt(order);
     if (resumeAt.getTime() > now.getTime()) {
       let waiting = await MatchingAttempt.findOne({
         orderId: order._id,
