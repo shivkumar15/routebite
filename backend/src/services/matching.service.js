@@ -20,7 +20,6 @@ import { Trip } from '../models/trip.model.js';
 import { AppError } from '../utils/app-error.js';
 import {
   geoPointToLatLng,
-  haversineMeters,
   projectPointOnSegment,
 } from './matching-geometry.service.js';
 import { estimateRoute } from './route-estimate.service.js';
@@ -151,7 +150,7 @@ async function discoverAvailableNow(order, now) {
   }).limit(MATCHING_LIMITS.AVAILABLE_NOW_DISCOVERY_LIMIT);
 }
 
-async function discoverTrips(order, now) {
+async function discoverTrips(order) {
   const scheduledUpperBound = new Date(
     new Date(order.deliveryWindowEnd).getTime() +
       PARTNER_OPERATION_LIMITS.MAX_DEPARTURE_FLEX_MINUTES * 60 * 1000,
@@ -325,29 +324,41 @@ async function refineTripCandidate({ trip, partner, order, now }) {
   };
 }
 
+function compareCandidates(a, b) {
+  const deliveryDiff =
+    new Date(a.predictedDeliveryAt).getTime() - new Date(b.predictedDeliveryAt).getTime();
+  if (Math.abs(deliveryDiff) > 60 * 1000) return deliveryDiff;
+
+  const aOnWay = a.mode === MATCHING_PARTNER_MODE.AVAILABLE_NOW ? 1 : 0;
+  const bOnWay = b.mode === MATCHING_PARTNER_MODE.AVAILABLE_NOW ? 1 : 0;
+  if (aOnWay !== bOnWay) return aOnWay - bOnWay;
+
+  const aDetour = a.additionalDetourSeconds ?? Number.POSITIVE_INFINITY;
+  const bDetour = b.additionalDetourSeconds ?? Number.POSITIVE_INFINITY;
+  if (aDetour !== bDetour) return aDetour - bDetour;
+  if (a.pickupTravelSeconds !== b.pickupTravelSeconds) {
+    return a.pickupTravelSeconds - b.pickupTravelSeconds;
+  }
+  if (a.completedOrderCount !== b.completedOrderCount) {
+    return b.completedOrderCount - a.completedOrderCount;
+  }
+  if (a.ratingAverage !== b.ratingAverage) return b.ratingAverage - a.ratingAverage;
+  return a.partnerId.toString().localeCompare(b.partnerId.toString());
+}
+
 export function rankCandidates(candidates) {
-  return [...candidates]
-    .sort((a, b) => {
-      const deliveryDiff =
-        new Date(a.predictedDeliveryAt).getTime() - new Date(b.predictedDeliveryAt).getTime();
-      if (Math.abs(deliveryDiff) > 60 * 1000) return deliveryDiff;
+  const bestByPartner = new Map();
 
-      const aOnWay = a.mode === MATCHING_PARTNER_MODE.AVAILABLE_NOW ? 1 : 0;
-      const bOnWay = b.mode === MATCHING_PARTNER_MODE.AVAILABLE_NOW ? 1 : 0;
-      if (aOnWay !== bOnWay) return aOnWay - bOnWay;
+  for (const candidate of candidates) {
+    const key = candidate.partnerId.toString();
+    const current = bestByPartner.get(key);
+    if (!current || compareCandidates(candidate, current) < 0) {
+      bestByPartner.set(key, candidate);
+    }
+  }
 
-      const aDetour = a.additionalDetourSeconds ?? Number.POSITIVE_INFINITY;
-      const bDetour = b.additionalDetourSeconds ?? Number.POSITIVE_INFINITY;
-      if (aDetour !== bDetour) return aDetour - bDetour;
-      if (a.pickupTravelSeconds !== b.pickupTravelSeconds) {
-        return a.pickupTravelSeconds - b.pickupTravelSeconds;
-      }
-      if (a.completedOrderCount !== b.completedOrderCount) {
-        return b.completedOrderCount - a.completedOrderCount;
-      }
-      if (a.ratingAverage !== b.ratingAverage) return b.ratingAverage - a.ratingAverage;
-      return a.partnerId.toString().localeCompare(b.partnerId.toString());
-    })
+  return [...bestByPartner.values()]
+    .sort(compareCandidates)
     .map((candidate, index) => ({ ...candidate, rankPosition: index + 1 }));
 }
 
@@ -419,7 +430,7 @@ export async function runMatchingForOrder(orderId, now = new Date()) {
   try {
     const [availablePartners, tripEntries] = await Promise.all([
       discoverAvailableNow(order, now),
-      discoverTrips(order, now),
+      discoverTrips(order),
     ]);
 
     const rawCandidates = [
@@ -444,7 +455,7 @@ export async function runMatchingForOrder(orderId, now = new Date()) {
 
         if (result.candidate) eligible.push(result.candidate);
         else incrementReason(rejectionSummary, result.rejected);
-      } catch (error) {
+      } catch {
         incrementReason(rejectionSummary, MATCHING_REJECTION_REASON.NO_ROUTE_AVAILABLE);
       }
     }
@@ -505,17 +516,4 @@ export async function runMatchingForOrder(orderId, now = new Date()) {
     );
     throw error;
   }
-}
-
-export async function getCustomerMatchingState({ customerId, orderId }) {
-  const order = await Order.findOne({ _id: orderId, customerId });
-  if (!order) {
-    throw new AppError('Order not found.', { statusCode: 404, code: 'ORDER_NOT_FOUND' });
-  }
-
-  const attempt = await MatchingAttempt.findOne({ orderId: order._id }).sort({ attemptNumber: -1 });
-  return {
-    orderStatus: order.status,
-    matching: safeAttempt(attempt),
-  };
 }
