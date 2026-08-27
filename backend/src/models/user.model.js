@@ -1,9 +1,10 @@
 import mongoose from 'mongoose';
 import { USER_ROLES } from '../constants/auth.constants.js';
 
-const phoneVerificationSchema = new mongoose.Schema(
+const verificationSchema = new mongoose.Schema(
   {
     otpHash: { type: String, default: null, select: false },
+    requestedAt: { type: Date, default: null },
     expiresAt: { type: Date, default: null },
     attempts: { type: Number, default: 0, min: 0 },
   },
@@ -25,6 +26,10 @@ const userSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
       maxlength: 254,
+    },
+    emailVerified: {
+      type: Boolean,
+      default: false,
     },
     phone: {
       type: String,
@@ -50,8 +55,12 @@ const userSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    emailVerification: {
+      type: verificationSchema,
+      default: () => ({}),
+    },
     phoneVerification: {
-      type: phoneVerificationSchema,
+      type: verificationSchema,
       default: () => ({}),
     },
   },

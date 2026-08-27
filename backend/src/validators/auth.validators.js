@@ -48,3 +48,16 @@ export const loginValidators = [
     .isLength({ min: 1, max: 128 })
     .withMessage('Password is required.'),
 ];
+
+export const otpValidators = [
+  body('otp')
+    .isString()
+    .withMessage('Verification code is required.')
+    .bail()
+    .trim()
+    .matches(/^\d{6}$/)
+    .withMessage('Verification code must contain exactly 6 digits.'),
+];
+
+export const phoneOtpValidators = otpValidators;
+export const emailOtpValidators = otpValidators;

@@ -32,11 +32,25 @@ a {
 }
 
 .app-shell,
-.auth-shell {
+.auth-shell,
+.admin-shell {
   min-height: 100vh;
+  padding: var(--space-5);
+}
+
+.app-shell,
+.auth-shell {
   display: grid;
   place-items: center;
-  padding: var(--space-5);
+}
+
+.phase-zero-card,
+.auth-card,
+.account-card,
+.admin-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
 }
 
 .phase-zero-card,
@@ -44,18 +58,24 @@ a {
 .account-card {
   width: min(100%, 560px);
   padding: var(--space-6);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
 }
 
 .auth-card {
   width: min(100%, 460px);
 }
 
+.partner-application-card {
+  width: min(100%, 560px);
+}
+
+.wide-account-card {
+  width: min(100%, 720px);
+}
+
 .phase-zero-card h1,
 .auth-card h1,
-.account-card h1 {
+.account-card h1,
+.admin-panel h1 {
   margin: 0 0 var(--space-3);
   color: var(--color-brand);
   line-height: 1.05;
@@ -64,7 +84,9 @@ a {
 .phase-zero-card > p,
 .form-intro,
 .auth-switch,
-.system-status {
+.system-status,
+.admin-header p,
+.review-card p {
   color: var(--color-text-muted);
   line-height: 1.6;
 }
@@ -99,7 +121,9 @@ a {
   font-weight: 650;
 }
 
-.auth-form input {
+.auth-form input,
+.inline-form input,
+.review-actions input {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -110,7 +134,9 @@ a {
   outline: none;
 }
 
-.auth-form input:focus {
+.auth-form input:focus,
+.inline-form input:focus,
+.review-actions input:focus {
   border-color: var(--color-brand);
   box-shadow: 0 0 0 3px rgba(91, 36, 52, 0.1);
 }
@@ -144,16 +170,43 @@ a {
   border: 1px solid var(--color-border);
 }
 
-.primary-button:disabled {
-  cursor: wait;
-  opacity: 0.65;
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
-.home-actions {
+.danger-button {
+  color: var(--color-danger);
+  border-color: rgba(182, 64, 58, 0.35);
+}
+
+.home-actions,
+.inline-form,
+.review-actions,
+.account-heading,
+.admin-header {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
+}
+
+.home-actions {
   margin-top: var(--space-5);
+}
+
+.account-heading,
+.admin-header {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.inline-form {
+  align-items: center;
+}
+
+.inline-form input {
+  flex: 1 1 180px;
 }
 
 .system-status {
@@ -163,14 +216,24 @@ a {
   font-size: 0.88rem;
 }
 
-.form-error {
-  margin: 0;
+.form-error,
+.success-message {
+  margin: var(--space-4) 0;
   padding: var(--space-3);
+  border-radius: var(--radius-control);
+  font-size: 0.9rem;
+}
+
+.form-error {
   color: var(--color-danger);
   background: rgba(182, 64, 58, 0.07);
   border: 1px solid rgba(182, 64, 58, 0.2);
-  border-radius: var(--radius-control);
-  font-size: 0.9rem;
+}
+
+.success-message {
+  color: var(--color-success);
+  background: rgba(47, 118, 87, 0.08);
+  border: 1px solid rgba(47, 118, 87, 0.2);
 }
 
 .auth-switch {
@@ -201,21 +264,145 @@ a {
   overflow-wrap: anywhere;
 }
 
+.compact-details {
+  margin: var(--space-4) 0 0;
+}
+
+.account-section {
+  margin: var(--space-5) 0;
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.account-section h2,
+.review-card h2 {
+  margin: 0 0 var(--space-2);
+  color: var(--color-brand);
+}
+
+.partner-status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+}
+
+.partner-status-row span {
+  color: var(--color-text-muted);
+}
+
+.admin-shell {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.admin-panel {
+  padding: var(--space-6);
+}
+
+.review-list {
+  display: grid;
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+}
+
+.review-card {
+  padding: var(--space-5);
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(320px, 1.2fr);
+  gap: var(--space-5);
+}
+
+.review-images {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.review-images figure {
+  margin: 0;
+}
+
+.review-images figcaption {
+  margin-bottom: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.review-images img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.review-actions {
+  align-items: center;
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.review-actions input {
+  flex: 1 1 260px;
+}
+
+.status-good {
+  color: var(--color-success) !important;
+  font-weight: 700;
+}
+
+.status-warning {
+  color: var(--color-warning) !important;
+  font-weight: 700;
+}
+
+.empty-state {
+  margin-top: var(--space-5);
+  padding: var(--space-5);
+  color: var(--color-text-muted);
+  background: var(--color-background);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+@media (max-width: 760px) {
+  .review-grid,
+  .review-images {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 520px) {
   .app-shell,
-  .auth-shell {
+  .auth-shell,
+  .admin-shell {
     align-items: start;
     padding: var(--space-4);
   }
 
   .phase-zero-card,
   .auth-card,
-  .account-card {
+  .account-card,
+  .admin-panel {
     padding: var(--space-5);
   }
 
   .account-details div {
     grid-template-columns: 1fr;
     gap: var(--space-1);
+  }
+
+  .partner-status-row {
+    flex-direction: column;
   }
 }
