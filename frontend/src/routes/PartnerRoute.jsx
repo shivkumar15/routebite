@@ -4,6 +4,29 @@ import api from '../api/axios.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { socket } from '../socket/socket.js';
 
+function getBrowserLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation unavailable.'));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracyMeters: position.coords.accuracy,
+      }),
+      reject,
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 10000,
+      },
+    );
+  });
+}
+
 export default function PartnerRoute({ children }) {
   const { user, partner, loading } = useAuth();
   const [offerCount, setOfferCount] = useState(0);
@@ -28,6 +51,17 @@ export default function PartnerRoute({ children }) {
       }
     }
 
+    async function keepAvailableLocationFresh() {
+      try {
+        const { data } = await api.get('/partner/operational-state');
+        if (data.data.partner.availabilityStatus !== 'AVAILABLE_NOW') return;
+        const location = await getBrowserLocation();
+        await api.put('/partner/location', location);
+      } catch {
+        // Foreground refresh is best-effort; the backend freshness rule remains authoritative.
+      }
+    }
+
     const handleOfferChange = () => refreshOffers();
     socket.connect();
     socket.on('offer:new', handleOfferChange);
@@ -35,9 +69,13 @@ export default function PartnerRoute({ children }) {
     socket.on('offer:cancelled', handleOfferChange);
     socket.on('offer:accepted', handleOfferChange);
     refreshOffers();
+    keepAvailableLocationFresh();
+
+    const locationTimer = window.setInterval(keepAvailableLocationFresh, 15000);
 
     return () => {
       active = false;
+      window.clearInterval(locationTimer);
       socket.off('offer:new', handleOfferChange);
       socket.off('offer:expired', handleOfferChange);
       socket.off('offer:cancelled', handleOfferChange);
