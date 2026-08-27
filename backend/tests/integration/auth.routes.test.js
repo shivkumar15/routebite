@@ -38,6 +38,24 @@ describe('auth route contract', () => {
     expect(response.body.error.code).toBe('AUTH_REQUIRED');
   });
 
+  test('email OTP request requires authentication', async () => {
+    const response = await request(app).post('/api/v1/auth/email-otp/request');
+
+    expect(response.status).toBe(401);
+    expect(response.body.success).toBe(false);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
+  test('email OTP verification requires authentication', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/email-otp/verify')
+      .send({ otp: '123456' });
+
+    expect(response.status).toBe(401);
+    expect(response.body.success).toBe(false);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
   test('POST /api/v1/auth/logout is safe when already logged out', async () => {
     const response = await request(app).post('/api/v1/auth/logout');
 
