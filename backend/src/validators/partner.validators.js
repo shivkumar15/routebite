@@ -1,4 +1,5 @@
 import { body, param } from 'express-validator';
+import { PARTNER_AVAILABILITY_STATUS } from '../constants/partner.constants.js';
 
 export const partnerApplicationValidators = [
   body('profilePhotoAssetId')
@@ -21,6 +22,28 @@ export const partnerApplicationValidators = [
     .trim()
     .isLength({ min: 2, max: 80 })
     .withMessage('Enrollment number must be between 2 and 80 characters.'),
+];
+
+export const partnerAvailabilityValidators = [
+  body('status')
+    .isIn(Object.values(PARTNER_AVAILABILITY_STATUS))
+    .withMessage('Availability status must be OFFLINE or AVAILABLE_NOW.'),
+];
+
+export const partnerLocationValidators = [
+  body('latitude')
+    .isFloat({ min: -90, max: 90 })
+    .withMessage('Latitude must be between -90 and 90.')
+    .toFloat(),
+  body('longitude')
+    .isFloat({ min: -180, max: 180 })
+    .withMessage('Longitude must be between -180 and 180.')
+    .toFloat(),
+  body('accuracyMeters')
+    .optional({ nullable: true })
+    .isFloat({ min: 0, max: 10000 })
+    .withMessage('Location accuracy must be between 0 and 10000 meters.')
+    .toFloat(),
 ];
 
 export const partnerIdValidators = [

@@ -41,6 +41,37 @@ const collegeIdentitySchema = new mongoose.Schema(
   { _id: false },
 );
 
+const geoPointSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point',
+      required: true,
+    },
+    coordinates: {
+      type: [Number],
+      required: true,
+      validate: {
+        validator(value) {
+          return (
+            Array.isArray(value) &&
+            value.length === 2 &&
+            Number.isFinite(value[0]) &&
+            Number.isFinite(value[1]) &&
+            value[0] >= -180 &&
+            value[0] <= 180 &&
+            value[1] >= -90 &&
+            value[1] <= 90
+          );
+        },
+        message: 'GeoJSON coordinates must be [longitude, latitude].',
+      },
+    },
+  },
+  { _id: false },
+);
+
 const partnerSchema = new mongoose.Schema(
   {
     userId: {
@@ -69,6 +100,20 @@ const partnerSchema = new mongoose.Schema(
       enum: Object.values(PARTNER_AVAILABILITY_STATUS),
       default: PARTNER_AVAILABILITY_STATUS.OFFLINE,
     },
+    currentLocation: {
+      type: geoPointSchema,
+      default: null,
+    },
+    locationAccuracyMeters: {
+      type: Number,
+      default: null,
+      min: 0,
+      max: 10000,
+    },
+    locationUpdatedAt: {
+      type: Date,
+      default: null,
+    },
     activeOrderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Order',
@@ -85,6 +130,8 @@ const partnerSchema = new mongoose.Schema(
   },
 );
 
+partnerSchema.index({ currentLocation: '2dsphere' });
+partnerSchema.index({ verificationStatus: 1, availabilityStatus: 1 });
 partnerSchema.index({ verificationStatus: 1, createdAt: 1 });
 partnerSchema.index({ activeOrderId: 1 });
 
