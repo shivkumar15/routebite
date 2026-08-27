@@ -1,0 +1,12 @@
+export const OFFER_STATUS = Object.freeze({
+  PENDING: 'PENDING',
+  ACCEPTED: 'ACCEPTED',
+  REJECTED: 'REJECTED',
+  EXPIRED: 'EXPIRED',
+  CANCELLED: 'CANCELLED',
+});
+
+export const OFFER_LIMITS = Object.freeze({
+  TIMEOUT_SECONDS: 20,
+  EXPIRY_SCAN_INTERVAL_MS: 5000,
+});

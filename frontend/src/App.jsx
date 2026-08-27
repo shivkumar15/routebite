@@ -9,6 +9,7 @@ import OrderDraftPage from './pages/customer/OrderDraftPage.jsx';
 import OrdersPage from './pages/customer/OrdersPage.jsx';
 import PartnerApplyPage from './pages/partner/PartnerApplyPage.jsx';
 import PartnerDashboardPage from './pages/partner/PartnerDashboardPage.jsx';
+import PartnerOffersPage from './pages/partner/PartnerOffersPage.jsx';
 import AdminRoute from './routes/AdminRoute.jsx';
 import PartnerRoute from './routes/PartnerRoute.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
@@ -72,6 +73,14 @@ export default function App() {
         element={
           <PartnerRoute>
             <PartnerDashboardPage />
+          </PartnerRoute>
+        }
+      />
+      <Route
+        path="/partner/offers"
+        element={
+          <PartnerRoute>
+            <PartnerOffersPage />
           </PartnerRoute>
         }
       />

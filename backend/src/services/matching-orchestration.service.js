@@ -3,6 +3,7 @@ import { DELIVERY_TYPE, ORDER_STATUS } from '../constants/order.constants.js';
 import { MatchingAttempt } from '../models/matching-attempt.model.js';
 import { Order } from '../models/order.model.js';
 import { runMatchingForOrder } from './matching.service.js';
+import { dispatchNextOfferBatch } from './offer.service.js';
 
 function waitingAttemptToResult(attempt) {
   return {
@@ -20,6 +21,14 @@ function waitingAttemptToResult(attempt) {
     failureReason: null,
     completedAt: null,
   };
+}
+
+async function runAndDispatch(orderId, now) {
+  const result = await runMatchingForOrder(orderId, now);
+  if (result?.status === MATCHING_ATTEMPT_STATUS.CANDIDATES_READY) {
+    await dispatchNextOfferBatch(result.id, now);
+  }
+  return result;
 }
 
 export function getScheduledMatchingResumeAt(order) {
@@ -61,7 +70,7 @@ export async function startOrDeferMatching(orderId, now = new Date()) {
   });
   if (waiting) await MatchingAttempt.deleteOne({ _id: waiting._id });
 
-  return runMatchingForOrder(order._id, now);
+  return runAndDispatch(order._id, now);
 }
 
 export async function resumeDueMatchingAttempts(now = new Date(), limit = 10) {
@@ -79,7 +88,7 @@ export async function resumeDueMatchingAttempts(now = new Date(), limit = 10) {
       status: MATCHING_ATTEMPT_STATUS.WAITING_FOR_HORIZON,
     });
     try {
-      const result = await runMatchingForOrder(attempt.orderId, now);
+      const result = await runAndDispatch(attempt.orderId, now);
       results.push(result);
     } catch (error) {
       console.error('Scheduled matching resume failed', {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../../api/axios.js';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { socket } from '../../socket/socket.js';
 
 const RAZORPAY_CHECKOUT_SRC = 'https://checkout.razorpay.com/v1/checkout.js';
 
@@ -90,6 +91,37 @@ export default function CheckoutPage() {
     return () => { active = false; };
   }, [orderId]);
 
+  useEffect(() => {
+    async function refreshForEvent(payload, nextMessage) {
+      if (payload?.orderId !== orderId) return;
+      try {
+        await loadState();
+        setMessage(nextMessage);
+      } catch {
+        // REST remains authoritative; a later refresh will recover canonical state.
+      }
+    }
+
+    const onOffersDispatched = (payload) =>
+      refreshForEvent(payload, `Offer round ${payload.round} sent to ${payload.offerCount} partner${payload.offerCount === 1 ? '' : 's'}.`);
+    const onAssigned = (payload) =>
+      refreshForEvent(payload, 'A delivery partner accepted your request.');
+    const onMatchingFailed = (payload) =>
+      refreshForEvent(payload, 'No partner accepted or remained eligible for this request.');
+
+    socket.connect();
+    socket.on('matching:offers-dispatched', onOffersDispatched);
+    socket.on('order:assigned', onAssigned);
+    socket.on('matching:failed', onMatchingFailed);
+
+    return () => {
+      socket.off('matching:offers-dispatched', onOffersDispatched);
+      socket.off('order:assigned', onAssigned);
+      socket.off('matching:failed', onMatchingFailed);
+      socket.disconnect();
+    };
+  }, [loadState, orderId]);
+
   async function verifyCheckoutResponse(response) {
     const { data } = await api.post(`/orders/${orderId}/payment/verify`, {
       razorpayOrderId: response.razorpay_order_id,
@@ -100,7 +132,7 @@ export default function CheckoutPage() {
     setPayment(data.data.payment);
     setMatching(data.data.matching ?? null);
     await loadState();
-    setMessage('Test payment confirmed by RouteBite. Matching orchestration has started.');
+    setMessage('Test payment confirmed by RouteBite. Matching and offer dispatch have started.');
   }
 
   async function handlePay() {
@@ -205,6 +237,7 @@ export default function CheckoutPage() {
   const payable = ['DRAFT', 'AWAITING_PAYMENT'].includes(order.status);
   const waitingForHorizon = matching?.status === 'WAITING_FOR_HORIZON';
   const candidatesReady = matching?.status === 'CANDIDATES_READY';
+  const assigned = order.status === 'ASSIGNED';
   const noCandidates = order.status === 'MATCHING_FAILED' || matching?.status === 'NO_CANDIDATES';
 
   return (
@@ -251,7 +284,14 @@ export default function CheckoutPage() {
           </div>
         ) : null}
 
-        {confirmed && waitingForHorizon ? (
+        {confirmed && assigned ? (
+          <div className="checkout-success-panel">
+            <strong>Partner accepted your request</strong>
+            <p>The order is now ASSIGNED. RouteBite atomically locked this request to one delivery partner and cancelled the losing offers.</p>
+          </div>
+        ) : null}
+
+        {confirmed && !assigned && waitingForHorizon ? (
           <div className="checkout-success-panel">
             <strong>Payment confirmed — matching scheduled</strong>
             <p>
@@ -260,27 +300,27 @@ export default function CheckoutPage() {
           </div>
         ) : null}
 
-        {confirmed && candidatesReady ? (
+        {confirmed && !assigned && candidatesReady ? (
           <div className="checkout-success-panel">
-            <strong>Eligible partners found</strong>
+            <strong>Offers are live</strong>
             <p>
-              RouteBite found {matching.eligibleCandidateCount} eligible candidate{matching.eligibleCandidateCount === 1 ? '' : 's'} and prepared the top {matching.offerReadyCount} for offer dispatch. Phase 7 will add accept/reject and atomic assignment.
+              RouteBite found {matching.eligibleCandidateCount} eligible candidate{matching.eligibleCandidateCount === 1 ? '' : 's'}. The highest-ranked available batch is being offered for 20 seconds before fallback advances.
             </p>
           </div>
         ) : null}
 
-        {confirmed && !waitingForHorizon && !candidatesReady && !noCandidates ? (
+        {confirmed && !assigned && !waitingForHorizon && !candidatesReady && !noCandidates ? (
           <div className="checkout-success-panel">
             <strong>Payment confirmed — finding a partner</strong>
             <p>RouteBite is evaluating verified nearby and on-my-way partners against this delivery window.</p>
           </div>
         ) : null}
 
-        {confirmed && noCandidates ? (
+        {confirmed && !assigned && noCandidates ? (
           <div className="matching-failed-panel">
             <strong>No eligible partner right now</strong>
             <p>
-              The matching attempt completed without a partner who could satisfy the current route and delivery window. The order is explicitly marked MATCHING_FAILED rather than waiting indefinitely.
+              Matching and offer fallback completed without a partner who could satisfy this request. The order is explicitly marked MATCHING_FAILED rather than waiting indefinitely.
             </p>
           </div>
         ) : null}

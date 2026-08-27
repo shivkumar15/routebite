@@ -3,12 +3,15 @@ import mongoose from 'mongoose';
 import app from './src/app.js';
 import { connectDatabase } from './src/config/db.js';
 import { env } from './src/config/env.js';
+import { OFFER_LIMITS } from './src/constants/offer.constants.js';
 import { resumeDueMatchingAttempts } from './src/services/matching-orchestration.service.js';
+import { runOfferMaintenance } from './src/services/offer-maintenance.service.js';
 import { createSocketServer } from './src/socket/index.js';
 
 const httpServer = http.createServer(app);
 createSocketServer(httpServer);
 let matchingTimer = null;
+let offerTimer = null;
 
 async function runMatchingResumeJob() {
   try {
@@ -18,13 +21,28 @@ async function runMatchingResumeJob() {
   }
 }
 
+async function runOfferMaintenanceJob() {
+  try {
+    await runOfferMaintenance();
+  } catch (error) {
+    console.error('Offer maintenance job failed', error.message);
+  }
+}
+
 async function start() {
   try {
     await connectDatabase();
     await runMatchingResumeJob();
+    await runOfferMaintenanceJob();
 
     matchingTimer = setInterval(runMatchingResumeJob, 60 * 1000);
     matchingTimer.unref?.();
+
+    offerTimer = setInterval(
+      runOfferMaintenanceJob,
+      OFFER_LIMITS.EXPIRY_SCAN_INTERVAL_MS,
+    );
+    offerTimer.unref?.();
 
     httpServer.listen(env.port, () => {
       console.log(`RouteBite API listening on port ${env.port}`);
@@ -38,6 +56,7 @@ async function start() {
 async function shutdown(signal) {
   console.log(`${signal} received. Shutting down...`);
   if (matchingTimer) clearInterval(matchingTimer);
+  if (offerTimer) clearInterval(offerTimer);
 
   httpServer.close(async () => {
     await mongoose.connection.close();

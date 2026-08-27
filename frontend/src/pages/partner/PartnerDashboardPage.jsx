@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios.js';
+import ActiveDeliveryCard from '../../components/partner/ActiveDeliveryCard.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 
 const EMPTY_TRIP_FORM = {
@@ -54,6 +55,7 @@ function statusLabel(status) {
 export default function PartnerDashboardPage() {
   const { refreshSession } = useAuth();
   const [operational, setOperational] = useState(null);
+  const [activeOrder, setActiveOrder] = useState(null);
   const [trips, setTrips] = useState([]);
   const [tripForm, setTripForm] = useState(EMPTY_TRIP_FORM);
   const [loading, setLoading] = useState(true);
@@ -69,11 +71,13 @@ export default function PartnerDashboardPage() {
   async function loadDashboard() {
     setError('');
     try {
-      const [operationalResponse, tripsResponse] = await Promise.all([
+      const [operationalResponse, activeOrderResponse, tripsResponse] = await Promise.all([
         api.get('/partner/operational-state'),
+        api.get('/partner/active-order'),
         api.get('/partner/trips'),
       ]);
       setOperational(operationalResponse.data.data.partner);
+      setActiveOrder(activeOrderResponse.data.data.order);
       setTrips(tripsResponse.data.data.trips);
     } catch (requestError) {
       setError(
@@ -218,15 +222,15 @@ export default function PartnerDashboardPage() {
 
       setMessage(
         action === 'start'
-          ? 'Trip started. Available Now has been turned off.'
+          ? 'Planned On My Way route started. Available Now has been turned off.'
           : action === 'complete'
-            ? 'Trip completed.'
-            : 'Trip cancelled.',
+            ? 'Planned route completed.'
+            : 'Planned route cancelled.',
       );
     } catch (requestError) {
       setError(
         requestError.response?.data?.error?.message ??
-          `Could not ${action} this trip.`,
+          `Could not ${action} this planned route.`,
       );
     } finally {
       setBusy('');
@@ -238,18 +242,22 @@ export default function PartnerDashboardPage() {
   }
 
   const isAvailable = operational?.availabilityStatus === 'AVAILABLE_NOW';
+  const handlingDelivery = Boolean(activeOrder);
 
   return (
     <main className="partner-workspace">
       <header className="partner-workspace-header">
         <div>
           <p className="eyebrow">RouteBite partner</p>
-          <h1>Where are you heading?</h1>
+          <h1>{handlingDelivery ? 'Your active delivery' : 'Where are you heading?'}</h1>
           <p>
-            Go online for nearby requests, or publish a future route when you are already travelling somewhere.
+            {handlingDelivery
+              ? 'This accepted request is locked to you. Finish its delivery flow before taking another request.'
+              : 'Go online for nearby requests, or publish a future route when you are already travelling somewhere.'}
           </p>
         </div>
         <div className="partner-header-actions">
+          <Link className="secondary-link" to="/partner/offers">Delivery offers</Link>
           <Link className="secondary-link" to="/account">Account</Link>
           <Link className="secondary-link" to="/">Home</Link>
         </div>
@@ -258,13 +266,23 @@ export default function PartnerDashboardPage() {
       {message ? <p className="success-message partner-flash">{message}</p> : null}
       {error ? <p className="form-error partner-flash">{error}</p> : null}
 
+      <ActiveDeliveryCard order={activeOrder} />
+
       <section className="partner-mode-grid">
         <article className={`partner-mode-card ${isAvailable ? 'is-live' : ''}`}>
           <div className="partner-mode-icon" aria-hidden="true">●</div>
           <p className="eyebrow">Available to deliver</p>
-          <h2>{isAvailable ? 'You’re live nearby' : 'Go online around you'}</h2>
+          <h2>
+            {handlingDelivery
+              ? 'Busy with an accepted delivery'
+              : isAvailable
+                ? 'You’re live nearby'
+                : 'Go online around you'}
+          </h2>
           <p>
-            RouteBite can consider you for dedicated nearby deliveries while this mode is active.
+            {handlingDelivery
+              ? 'RouteBite keeps you offline for new requests while this delivery is active.'
+              : 'RouteBite can consider you for dedicated nearby deliveries while this mode is active.'}
           </p>
 
           <div className="partner-location-box">
@@ -288,14 +306,16 @@ export default function PartnerDashboardPage() {
             <button
               className="primary-button"
               type="button"
-              disabled={busy === 'availability' || Boolean(activeTrip)}
+              disabled={busy === 'availability' || Boolean(activeTrip) || handlingDelivery}
               onClick={() => handleAvailability(isAvailable ? 'OFFLINE' : 'AVAILABLE_NOW')}
             >
               {busy === 'availability'
                 ? 'Updating…'
-                : isAvailable
-                  ? 'Go offline'
-                  : 'Go available now'}
+                : handlingDelivery
+                  ? 'Busy with delivery'
+                  : isAvailable
+                    ? 'Go offline'
+                    : 'Go available now'}
             </button>
             <button
               className="secondary-button"
@@ -307,8 +327,10 @@ export default function PartnerDashboardPage() {
             </button>
           </div>
 
-          {activeTrip ? (
-            <p className="partner-mode-note">Finish your active trip before switching to Available Now.</p>
+          {handlingDelivery ? (
+            <p className="partner-mode-note">Complete the accepted delivery before going Available Now again.</p>
+          ) : activeTrip ? (
+            <p className="partner-mode-note">Finish your active planned route before switching to Available Now.</p>
           ) : null}
         </article>
 
@@ -319,10 +341,10 @@ export default function PartnerDashboardPage() {
             <span className="route-mini-rider">→</span>
             <span className="route-mini-pin destination" />
           </div>
-          <p className="eyebrow">On my way</p>
-          <h2>{activeTrip ? 'Your route is active' : 'Publish a route you already plan to take'}</h2>
+          <p className="eyebrow">On my way · planned route</p>
+          <h2>{activeTrip ? 'Your planned route is active' : 'Publish a route you already plan to take'}</h2>
           <p>
-            Scheduled trips are matched by direction and time later. Creating one does not make you nearby on-demand supply.
+            This is your own A → B travel route used for matching. It is separate from an accepted delivery job.
           </p>
           {activeTrip ? (
             <div className="active-route-summary">
@@ -341,18 +363,22 @@ export default function PartnerDashboardPage() {
       <section className="partner-section-card">
         <div className="partner-section-heading">
           <div>
-            <p className="eyebrow">Plan a journey</p>
-            <h2>Schedule an On My Way trip</h2>
+            <p className="eyebrow">Plan your own journey</p>
+            <h2>Schedule an On My Way route</h2>
           </div>
           <button
             type="button"
             className="secondary-button"
             onClick={useCurrentLocationForOrigin}
-            disabled={busy === 'origin-location'}
+            disabled={busy === 'origin-location' || handlingDelivery}
           >
             {busy === 'origin-location' ? 'Locating…' : 'Use my location as origin'}
           </button>
         </div>
+
+        {handlingDelivery ? (
+          <p className="partner-mode-note">Your accepted delivery is active. Planned-route actions are paused until that delivery finishes.</p>
+        ) : null}
 
         <form className="trip-form" onSubmit={handleCreateTrip}>
           <div className="trip-endpoint-panel">
@@ -364,11 +390,12 @@ export default function PartnerDashboardPage() {
                 onChange={(event) => setTripForm({ ...tripForm, originLabel: event.target.value })}
                 placeholder="Civil Lines"
                 required
+                disabled={handlingDelivery}
               />
             </label>
             <div className="coordinate-grid">
-              <label>Latitude<input type="number" step="any" min="-90" max="90" value={tripForm.originLatitude} onChange={(event) => setTripForm({ ...tripForm, originLatitude: event.target.value })} required /></label>
-              <label>Longitude<input type="number" step="any" min="-180" max="180" value={tripForm.originLongitude} onChange={(event) => setTripForm({ ...tripForm, originLongitude: event.target.value })} required /></label>
+              <label>Latitude<input type="number" step="any" min="-90" max="90" value={tripForm.originLatitude} onChange={(event) => setTripForm({ ...tripForm, originLatitude: event.target.value })} required disabled={handlingDelivery} /></label>
+              <label>Longitude<input type="number" step="any" min="-180" max="180" value={tripForm.originLongitude} onChange={(event) => setTripForm({ ...tripForm, originLongitude: event.target.value })} required disabled={handlingDelivery} /></label>
             </div>
           </div>
 
@@ -383,11 +410,12 @@ export default function PartnerDashboardPage() {
                 onChange={(event) => setTripForm({ ...tripForm, destinationLabel: event.target.value })}
                 placeholder="IIIT Allahabad"
                 required
+                disabled={handlingDelivery}
               />
             </label>
             <div className="coordinate-grid">
-              <label>Latitude<input type="number" step="any" min="-90" max="90" value={tripForm.destinationLatitude} onChange={(event) => setTripForm({ ...tripForm, destinationLatitude: event.target.value })} required /></label>
-              <label>Longitude<input type="number" step="any" min="-180" max="180" value={tripForm.destinationLongitude} onChange={(event) => setTripForm({ ...tripForm, destinationLongitude: event.target.value })} required /></label>
+              <label>Latitude<input type="number" step="any" min="-90" max="90" value={tripForm.destinationLatitude} onChange={(event) => setTripForm({ ...tripForm, destinationLatitude: event.target.value })} required disabled={handlingDelivery} /></label>
+              <label>Longitude<input type="number" step="any" min="-180" max="180" value={tripForm.destinationLongitude} onChange={(event) => setTripForm({ ...tripForm, destinationLongitude: event.target.value })} required disabled={handlingDelivery} /></label>
             </div>
           </div>
 
@@ -399,6 +427,7 @@ export default function PartnerDashboardPage() {
                 value={tripForm.scheduledDepartureAt}
                 onChange={(event) => setTripForm({ ...tripForm, scheduledDepartureAt: event.target.value })}
                 required
+                disabled={handlingDelivery}
               />
             </label>
             <label>
@@ -406,6 +435,7 @@ export default function PartnerDashboardPage() {
               <select
                 value={tripForm.departureFlexMinutes}
                 onChange={(event) => setTripForm({ ...tripForm, departureFlexMinutes: event.target.value })}
+                disabled={handlingDelivery}
               >
                 <option value="0">Exact time</option>
                 <option value="10">± 10 minutes</option>
@@ -416,8 +446,8 @@ export default function PartnerDashboardPage() {
             </label>
           </div>
 
-          <button className="primary-button trip-submit-button" type="submit" disabled={busy === 'create-trip'}>
-            {busy === 'create-trip' ? 'Scheduling…' : 'Publish this route'}
+          <button className="primary-button trip-submit-button" type="submit" disabled={busy === 'create-trip' || handlingDelivery}>
+            {busy === 'create-trip' ? 'Scheduling…' : handlingDelivery ? 'Finish active delivery first' : 'Publish this route'}
           </button>
         </form>
       </section>
@@ -425,15 +455,15 @@ export default function PartnerDashboardPage() {
       <section className="partner-section-card">
         <div className="partner-section-heading">
           <div>
-            <p className="eyebrow">Your routes</p>
-            <h2>Trips</h2>
+            <p className="eyebrow">Your planned routes</p>
+            <h2>On My Way routes</h2>
           </div>
           <span className="trip-count">{trips.length} total</span>
         </div>
 
         {trips.length === 0 ? (
           <div className="partner-empty-state">
-            <strong>No routes yet.</strong>
+            <strong>No planned routes yet.</strong>
             <span>Schedule a journey above when you already know where you are going.</span>
           </div>
         ) : (
@@ -464,15 +494,15 @@ export default function PartnerDashboardPage() {
 
                 {trip.status === 'TRIP_SCHEDULED' ? (
                   <div className="trip-card-actions">
-                    <button className="primary-button compact-button" type="button" disabled={Boolean(busy)} onClick={() => runTripAction(trip.id, 'start')}>Start trip</button>
-                    <button className="secondary-button compact-button" type="button" disabled={Boolean(busy)} onClick={() => runTripAction(trip.id, 'cancel')}>Cancel</button>
+                    <button className="primary-button compact-button" type="button" disabled={Boolean(busy) || handlingDelivery} onClick={() => runTripAction(trip.id, 'start')}>Start planned route</button>
+                    <button className="secondary-button compact-button" type="button" disabled={Boolean(busy) || handlingDelivery} onClick={() => runTripAction(trip.id, 'cancel')}>Cancel planned route</button>
                   </div>
                 ) : null}
 
                 {trip.status === 'TRIP_ACTIVE' ? (
                   <div className="trip-card-actions">
-                    <button className="primary-button compact-button" type="button" disabled={Boolean(busy)} onClick={() => runTripAction(trip.id, 'complete')}>Complete trip</button>
-                    <button className="secondary-button compact-button" type="button" disabled={Boolean(busy)} onClick={() => runTripAction(trip.id, 'cancel')}>Cancel trip</button>
+                    <button className="primary-button compact-button" type="button" disabled={Boolean(busy) || handlingDelivery} onClick={() => runTripAction(trip.id, 'complete')}>Complete planned route</button>
+                    <button className="secondary-button compact-button" type="button" disabled={Boolean(busy) || handlingDelivery} onClick={() => runTripAction(trip.id, 'cancel')}>Cancel planned route</button>
                   </div>
                 ) : null}
               </article>

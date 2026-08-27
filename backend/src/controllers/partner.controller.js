@@ -7,6 +7,7 @@ import {
   updatePartnerAvailability,
   updatePartnerLocation,
 } from '../services/partner-operations.service.js';
+import { getPartnerActiveOrder } from '../services/partner-active-order.service.js';
 
 export async function apply(req, res, next) {
   try {
@@ -44,6 +45,19 @@ export async function operationalState(req, res, next) {
     res.status(200).json({
       success: true,
       data: { partner },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function activeOrder(req, res, next) {
+  try {
+    const order = await getPartnerActiveOrder(req.auth.partnerId);
+
+    res.status(200).json({
+      success: true,
+      data: { order },
     });
   } catch (error) {
     next(error);

@@ -1,11 +1,14 @@
 import mongoose from 'mongoose';
+import { OFFER_STATUS } from '../constants/offer.constants.js';
 import {
   PARTNER_AVAILABILITY_STATUS,
   PARTNER_VERIFICATION_STATUS,
   TRIP_STATUS,
 } from '../constants/partner.constants.js';
+import { Offer } from '../models/offer.model.js';
 import { Partner } from '../models/partner.model.js';
 import { Trip } from '../models/trip.model.js';
+import { dispatchNextOfferBatch } from './offer.service.js';
 import { AppError } from '../utils/app-error.js';
 
 function toSafeTrip(trip) {
@@ -84,6 +87,31 @@ async function findOwnedTrip({ partnerId, tripId, session = null }) {
   }
 
   return trip;
+}
+
+async function cancelPendingTripOffers({ tripId, session, now }) {
+  const pending = await Offer.find({
+    tripId,
+    status: OFFER_STATUS.PENDING,
+  })
+    .select('matchingAttemptId')
+    .session(session);
+
+  if (pending.length === 0) return [];
+
+  await Offer.updateMany(
+    { tripId, status: OFFER_STATUS.PENDING },
+    { $set: { status: OFFER_STATUS.CANCELLED, respondedAt: now } },
+    { session },
+  );
+
+  return [...new Set(pending.map((offer) => offer.matchingAttemptId.toString()))];
+}
+
+async function advanceAttempts(attemptIds, now) {
+  for (const attemptId of attemptIds) {
+    await dispatchNextOfferBatch(attemptId, now);
+  }
 }
 
 export async function createTrip({ partnerId, payload }) {
@@ -204,6 +232,8 @@ export async function startTrip({ partnerId, tripId }) {
 export async function cancelTrip({ partnerId, tripId }) {
   const session = await mongoose.startSession();
   let result;
+  let attemptIds = [];
+  const now = new Date();
 
   try {
     await session.withTransaction(async () => {
@@ -225,8 +255,14 @@ export async function cancelTrip({ partnerId, tripId }) {
       }
 
       trip.status = TRIP_STATUS.CANCELLED;
-      trip.cancelledAt = new Date();
+      trip.cancelledAt = now;
       await trip.save({ session });
+
+      attemptIds = await cancelPendingTripOffers({
+        tripId: trip._id,
+        session,
+        now,
+      });
 
       if (partner.availabilityStatus !== PARTNER_AVAILABILITY_STATUS.OFFLINE) {
         partner.availabilityStatus = PARTNER_AVAILABILITY_STATUS.OFFLINE;
@@ -239,12 +275,15 @@ export async function cancelTrip({ partnerId, tripId }) {
     await session.endSession();
   }
 
+  await advanceAttempts(attemptIds, now);
   return result;
 }
 
 export async function completeTrip({ partnerId, tripId }) {
   const session = await mongoose.startSession();
   let result;
+  let attemptIds = [];
+  const now = new Date();
 
   try {
     await session.withTransaction(async () => {
@@ -266,8 +305,14 @@ export async function completeTrip({ partnerId, tripId }) {
       }
 
       trip.status = TRIP_STATUS.COMPLETED;
-      trip.completedAt = new Date();
+      trip.completedAt = now;
       await trip.save({ session });
+
+      attemptIds = await cancelPendingTripOffers({
+        tripId: trip._id,
+        session,
+        now,
+      });
 
       partner.availabilityStatus = PARTNER_AVAILABILITY_STATUS.OFFLINE;
       await partner.save({ session });
@@ -278,5 +323,6 @@ export async function completeTrip({ partnerId, tripId }) {
     await session.endSession();
   }
 
+  await advanceAttempts(attemptIds, now);
   return result;
 }

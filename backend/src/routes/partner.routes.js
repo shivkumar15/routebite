@@ -1,5 +1,11 @@
 import { Router } from 'express';
 import {
+  accept as acceptOffer,
+  list as listOffers,
+  reject as rejectOffer,
+} from '../controllers/offer.controller.js';
+import {
+  activeOrder,
   apply,
   me,
   operationalState,
@@ -16,6 +22,7 @@ import {
 } from '../controllers/trip.controller.js';
 import { requireApprovedPartner, requireAuth } from '../middleware/auth.middleware.js';
 import { validateRequest } from '../middleware/validate.middleware.js';
+import { offerIdValidators } from '../validators/offer.validators.js';
 import {
   partnerApplicationValidators,
   partnerAvailabilityValidators,
@@ -29,6 +36,7 @@ router.post('/apply', requireAuth, partnerApplicationValidators, validateRequest
 router.get('/profile', requireAuth, me);
 
 router.get('/operational-state', requireAuth, requireApprovedPartner, operationalState);
+router.get('/active-order', requireAuth, requireApprovedPartner, activeOrder);
 router.patch(
   '/availability',
   requireAuth,
@@ -44,6 +52,24 @@ router.put(
   partnerLocationValidators,
   validateRequest,
   updateLocation,
+);
+
+router.get('/offers', requireAuth, requireApprovedPartner, listOffers);
+router.post(
+  '/offers/:offerId/accept',
+  requireAuth,
+  requireApprovedPartner,
+  offerIdValidators,
+  validateRequest,
+  acceptOffer,
+);
+router.post(
+  '/offers/:offerId/reject',
+  requireAuth,
+  requireApprovedPartner,
+  offerIdValidators,
+  validateRequest,
+  rejectOffer,
 );
 
 router.post(

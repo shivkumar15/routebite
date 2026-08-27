@@ -1,0 +1,57 @@
+import { Order } from '../models/order.model.js';
+import { Partner } from '../models/partner.model.js';
+import { AppError } from '../utils/app-error.js';
+
+function toPartnerActiveOrder(order) {
+  if (!order) return null;
+
+  return {
+    id: order._id.toString(),
+    status: order.status,
+    vendorDisplayName: order.vendorDisplayName,
+    requestedItems: order.requestedItems,
+    pickupInstructions: order.pickupInstructions,
+    pickup: {
+      label: order.pickupText,
+      longitude: order.pickup.coordinates[0],
+      latitude: order.pickup.coordinates[1],
+    },
+    drop: {
+      label: order.dropText,
+      longitude: order.drop.coordinates[0],
+      latitude: order.drop.coordinates[1],
+    },
+    deliveryType: order.deliveryType,
+    deliveryWindowStart: order.deliveryWindowStart,
+    deliveryWindowEnd: order.deliveryWindowEnd,
+    assignedTripId: order.assignedTripId?.toString?.() ?? null,
+    expectedEarningPaise: order.pricing.partnerBaseEarningPaise,
+    assignedAt: order.updatedAt,
+  };
+}
+
+export async function getPartnerActiveOrder(partnerId) {
+  const partner = await Partner.findById(partnerId).select('activeOrderId');
+  if (!partner) {
+    throw new AppError('Partner not found.', {
+      statusCode: 404,
+      code: 'PARTNER_NOT_FOUND',
+    });
+  }
+
+  if (!partner.activeOrderId) return null;
+
+  const order = await Order.findOne({
+    _id: partner.activeOrderId,
+    assignedPartnerId: partner._id,
+  });
+
+  if (!order) {
+    throw new AppError('Active order reference is inconsistent.', {
+      statusCode: 409,
+      code: 'ACTIVE_ORDER_INCONSISTENT',
+    });
+  }
+
+  return toPartnerActiveOrder(order);
+}

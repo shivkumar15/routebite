@@ -36,6 +36,7 @@ const matchingAttemptSchema = new mongoose.Schema(
       index: true,
     },
     resumeAt: { type: Date, default: null, index: true },
+    dispatchLockUntil: { type: Date, default: null },
     routeSource: { type: String, default: null },
     discoveredCandidateCount: { type: Number, default: 0, min: 0 },
     eligibleCandidateCount: { type: Number, default: 0, min: 0 },

@@ -55,6 +55,38 @@ describe('partner route contract', () => {
     expect(response.body.error.code).toBe('AUTH_REQUIRED');
   });
 
+  test('active delivery read requires authentication', async () => {
+    const response = await request(app).get('/api/v1/partner/active-order');
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
+  test('offer list requires authentication', async () => {
+    const response = await request(app).get('/api/v1/partner/offers');
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
+  test('offer acceptance requires authentication', async () => {
+    const response = await request(app)
+      .post('/api/v1/partner/offers/507f1f77bcf86cd799439011/accept')
+      .send({});
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
+  test('offer rejection requires authentication', async () => {
+    const response = await request(app)
+      .post('/api/v1/partner/offers/507f1f77bcf86cd799439011/reject')
+      .send({});
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
   test('trip creation requires authentication', async () => {
     const response = await request(app).post('/api/v1/partner/trips').send({});
 
