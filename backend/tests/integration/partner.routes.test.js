@@ -85,6 +85,22 @@ describe('partner route contract', () => {
     expect(response.body.error.code).toBe('AUTH_REQUIRED');
   });
 
+  test('start delivery requires authentication', async () => {
+    const response = await request(app).post('/api/v1/partner/active-order/start-delivery');
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
+  test('active delivery location update requires authentication', async () => {
+    const response = await request(app)
+      .put('/api/v1/partner/active-order/location')
+      .send({ latitude: 25.43, longitude: 81.77, accuracyMeters: 15 });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
   test('offer list requires authentication', async () => {
     const response = await request(app).get('/api/v1/partner/offers');
 
