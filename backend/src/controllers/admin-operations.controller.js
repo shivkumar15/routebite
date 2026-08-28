@@ -2,11 +2,13 @@ import {
   getAdminOrderDetail,
   listAdminOrders,
 } from '../services/admin-operations.service.js';
+import { attachAdminOrderStopReasons } from '../services/admin-order-stop-reason.service.js';
 
 export async function orders(req, res, next) {
   try {
     const result = await listAdminOrders({ filter: req.query.filter });
-    res.status(200).json({ success: true, data: result });
+    const enriched = await attachAdminOrderStopReasons(result);
+    res.status(200).json({ success: true, data: enriched });
   } catch (error) {
     next(error);
   }
