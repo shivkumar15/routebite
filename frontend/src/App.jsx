@@ -10,6 +10,7 @@ import DemoLedgerPage from './pages/customer/DemoLedgerPage.jsx';
 import HomePage from './pages/customer/HomePage.jsx';
 import OrderDraftPage from './pages/customer/OrderDraftPage.jsx';
 import OrdersPage from './pages/customer/OrdersPage.jsx';
+import RatingPage from './pages/customer/RatingPage.jsx';
 import PartnerApplyPage from './pages/partner/PartnerApplyPage.jsx';
 import PartnerDashboardPage from './pages/partner/PartnerDashboardPage.jsx';
 import PartnerEarningsPage from './pages/partner/PartnerEarningsPage.jsx';
@@ -69,6 +70,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <DemoLedgerPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/orders/:orderId/rating"
+        element={
+          <ProtectedRoute>
+            <RatingPage />
           </ProtectedRoute>
         }
       />
