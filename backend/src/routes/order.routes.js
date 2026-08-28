@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { approvePrice, rejectPrice } from '../controllers/delivery.controller.js';
+import { generateDeliveryOtp } from '../controllers/delivery-otp.controller.js';
 import { detail as matchingDetail } from '../controllers/matching.controller.js';
 import { create, detail, list, update } from '../controllers/order.controller.js';
 import {
@@ -28,6 +29,7 @@ router.get('/:orderId/payment', paymentStatusValidators, validateRequest, paymen
 router.post('/:orderId/payment/verify', verifyPaymentValidators, validateRequest, verifyPayment);
 router.get('/:orderId/matching', orderIdValidators, validateRequest, matchingDetail);
 router.get('/:orderId/tracking', orderIdValidators, validateRequest, customerTracking);
+router.post('/:orderId/delivery-otp', orderIdValidators, validateRequest, generateDeliveryOtp);
 router.post(
   '/:orderId/price-adjustment/approve',
   orderIdValidators,
