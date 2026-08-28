@@ -1,5 +1,10 @@
 import { Router } from 'express';
 import {
+  confirmPartnerPickup,
+  reportPartnerPrice,
+  startPartnerPickup,
+} from '../controllers/delivery.controller.js';
+import {
   accept as acceptOffer,
   list as listOffers,
   reject as rejectOffer,
@@ -22,6 +27,7 @@ import {
 } from '../controllers/trip.controller.js';
 import { requireApprovedPartner, requireAuth } from '../middleware/auth.middleware.js';
 import { validateRequest } from '../middleware/validate.middleware.js';
+import { actualFoodPriceValidators } from '../validators/delivery.validators.js';
 import { offerIdValidators } from '../validators/offer.validators.js';
 import {
   partnerApplicationValidators,
@@ -37,6 +43,16 @@ router.get('/profile', requireAuth, me);
 
 router.get('/operational-state', requireAuth, requireApprovedPartner, operationalState);
 router.get('/active-order', requireAuth, requireApprovedPartner, activeOrder);
+router.post('/active-order/start-pickup', requireAuth, requireApprovedPartner, startPartnerPickup);
+router.post(
+  '/active-order/actual-price',
+  requireAuth,
+  requireApprovedPartner,
+  actualFoodPriceValidators,
+  validateRequest,
+  reportPartnerPrice,
+);
+router.post('/active-order/confirm-pickup', requireAuth, requireApprovedPartner, confirmPartnerPickup);
 router.patch(
   '/availability',
   requireAuth,

@@ -108,16 +108,36 @@ export default function CheckoutPage() {
       refreshForEvent(payload, 'A delivery partner accepted your request.');
     const onMatchingFailed = (payload) =>
       refreshForEvent(payload, 'No partner accepted or remained eligible for this request.');
+    const onPickupStarted = (payload) =>
+      refreshForEvent(payload, 'Your partner started heading to the food place.');
+    const onPriceApprovalRequired = (payload) =>
+      refreshForEvent(payload, 'The vendor price is higher than estimated. Please approve or reject it.');
+    const onPriceResolved = (payload) =>
+      refreshForEvent(payload, 'The actual food price has been recorded.');
+    const onPickedUp = (payload) =>
+      refreshForEvent(payload, 'Your partner confirmed that the food has been picked up.');
+    const onPriceTimedOut = (payload) =>
+      refreshForEvent(payload, 'Price approval timed out and this order needs review.');
 
     socket.connect();
     socket.on('matching:offers-dispatched', onOffersDispatched);
     socket.on('order:assigned', onAssigned);
     socket.on('matching:failed', onMatchingFailed);
+    socket.on('order:pickup-started', onPickupStarted);
+    socket.on('price:approval-required', onPriceApprovalRequired);
+    socket.on('price:resolved', onPriceResolved);
+    socket.on('order:picked-up', onPickedUp);
+    socket.on('price:timed-out', onPriceTimedOut);
 
     return () => {
       socket.off('matching:offers-dispatched', onOffersDispatched);
       socket.off('order:assigned', onAssigned);
       socket.off('matching:failed', onMatchingFailed);
+      socket.off('order:pickup-started', onPickupStarted);
+      socket.off('price:approval-required', onPriceApprovalRequired);
+      socket.off('price:resolved', onPriceResolved);
+      socket.off('order:picked-up', onPickedUp);
+      socket.off('price:timed-out', onPriceTimedOut);
       socket.disconnect();
     };
   }, [loadState, orderId]);
@@ -217,6 +237,30 @@ export default function CheckoutPage() {
     }
   }
 
+  async function handlePriceDecision(decision) {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const { data } = await api.post(
+        `/orders/${orderId}/price-adjustment/${decision === 'APPROVE' ? 'approve' : 'reject'}`,
+      );
+      setOrder(data.data.order);
+      setMessage(
+        decision === 'APPROVE'
+          ? 'Higher food price approved. Your partner can continue the pickup.'
+          : 'Higher food price rejected. The request was cancelled before purchase.',
+      );
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.error?.message ??
+          'Could not save your price decision.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) {
     return <main className="order-shell"><p>Loading checkout…</p></main>;
   }
@@ -233,12 +277,13 @@ export default function CheckoutPage() {
   }
 
   const pricing = order.pricing;
+  const adjustment = order.priceAdjustment ?? {};
   const confirmed = payment?.status === 'PAYMENT_CONFIRMED';
   const payable = ['DRAFT', 'AWAITING_PAYMENT'].includes(order.status);
-  const waitingForHorizon = matching?.status === 'WAITING_FOR_HORIZON';
-  const candidatesReady = matching?.status === 'CANDIDATES_READY';
-  const assigned = order.status === 'ASSIGNED';
-  const noCandidates = order.status === 'MATCHING_FAILED' || matching?.status === 'NO_CANDIDATES';
+  const matchingActive = order.status === 'MATCHING';
+  const waitingForHorizon = matchingActive && matching?.status === 'WAITING_FOR_HORIZON';
+  const candidatesReady = matchingActive && matching?.status === 'CANDIDATES_READY';
+  const noCandidates = order.status === 'MATCHING_FAILED' || (matchingActive && matching?.status === 'NO_CANDIDATES');
 
   return (
     <main className="order-shell">
@@ -248,7 +293,7 @@ export default function CheckoutPage() {
             <p className="eyebrow">Razorpay Test Mode</p>
             <h1>Confirm your request</h1>
             <p className="form-intro">
-              Review the server-calculated estimate before opening the test checkout.
+              Review the server-calculated estimate and follow the delivery state here.
             </p>
           </div>
           <Link className="secondary-link" to="/orders">My requests</Link>
@@ -267,14 +312,20 @@ export default function CheckoutPage() {
 
         <section className="checkout-breakdown">
           <div><span>Food estimate</span><strong>{formatMoney(pricing.estimatedFoodCostPaise)}</strong></div>
+          {adjustment.actualFoodCostPaise != null ? (
+            <div><span>Actual food price</span><strong>{formatMoney(adjustment.actualFoodCostPaise)}</strong></div>
+          ) : null}
           <div><span>Delivery</span><strong>{formatMoney(pricing.customerDeliveryChargePaise)}</strong></div>
           <div><span>Platform fee</span><strong>{formatMoney(pricing.platformFeePaise)}</strong></div>
-          <div className="checkout-total"><span>Estimated total</span><strong>{formatMoney(pricing.estimatedCustomerTotalPaise)}</strong></div>
+          <div className="checkout-total">
+            <span>{pricing.finalCustomerTotalPaise != null ? 'Current demo total' : 'Estimated total'}</span>
+            <strong>{formatMoney(pricing.finalCustomerTotalPaise ?? pricing.estimatedCustomerTotalPaise)}</strong>
+          </div>
         </section>
 
         <div className="test-payment-note">
           <strong>Prototype payment</strong>
-          <p>This uses Razorpay Test Mode. No real RouteBite marketplace settlement or partner payout happens in this phase.</p>
+          <p>This uses Razorpay Test Mode. Price changes in Phase 8 update RouteBite's demo accounting only; no live extra charge or refund is moved.</p>
         </div>
 
         {payment ? (
@@ -284,14 +335,70 @@ export default function CheckoutPage() {
           </div>
         ) : null}
 
-        {confirmed && assigned ? (
+        {confirmed && order.status === 'ASSIGNED' ? (
           <div className="checkout-success-panel">
             <strong>Partner accepted your request</strong>
-            <p>The order is now ASSIGNED. RouteBite atomically locked this request to one delivery partner and cancelled the losing offers.</p>
+            <p>Your partner has the job. The next step is to start heading to the food pickup.</p>
           </div>
         ) : null}
 
-        {confirmed && !assigned && waitingForHorizon ? (
+        {confirmed && order.status === 'PARTNER_TO_PICKUP' ? (
+          <div className="checkout-success-panel">
+            <strong>Partner is handling the pickup</strong>
+            <p>
+              {adjustment.actualFoodCostPaise == null
+                ? 'Your partner is heading to the food place and will confirm the actual vendor price before purchase.'
+                : adjustment.status === 'AUTO_DECREASED'
+                  ? `The actual food price is lower at ${formatMoney(adjustment.actualFoodCostPaise)}. RouteBite adjusted the demo total downward automatically.`
+                  : adjustment.status === 'APPROVED'
+                    ? 'You approved the higher vendor price. Your partner can now buy and collect the food.'
+                    : 'The vendor price matches the estimate. Your partner can buy and collect the food.'}
+            </p>
+          </div>
+        ) : null}
+
+        {confirmed && order.status === 'PRICE_CONFIRMATION_REQUIRED' ? (
+          <div className="price-approval-panel">
+            <strong>Vendor price increased — your approval is required</strong>
+            <p>
+              Estimated food price: {formatMoney(pricing.estimatedFoodCostPaise)}<br />
+              Actual food price: {formatMoney(adjustment.actualFoodCostPaise)}<br />
+              Increase: {formatMoney(adjustment.differencePaise)}
+            </p>
+            <small>Respond before {formatDate(adjustment.approvalExpiresAt)}. Your partner is told not to buy the food until you approve.</small>
+            <div className="price-approval-actions">
+              <button className="primary-button" type="button" disabled={busy} onClick={() => handlePriceDecision('APPROVE')}>
+                {busy ? 'Saving…' : `Approve ${formatMoney(adjustment.actualFoodCostPaise)}`}
+              </button>
+              <button className="secondary-button" type="button" disabled={busy} onClick={() => handlePriceDecision('REJECT')}>
+                Reject change
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {confirmed && order.status === 'PICKED_UP' ? (
+          <div className="checkout-success-panel">
+            <strong>Food picked up</strong>
+            <p>Your partner confirmed that the food is physically collected. Live delivery tracking begins in the next phase.</p>
+          </div>
+        ) : null}
+
+        {confirmed && order.status === 'CANCELLED' && adjustment.status === 'REJECTED' ? (
+          <div className="matching-failed-panel">
+            <strong>Price change rejected</strong>
+            <p>The request was cancelled before the partner purchased the food.</p>
+          </div>
+        ) : null}
+
+        {confirmed && order.status === 'ADMIN_REVIEW_REQUIRED' ? (
+          <div className="matching-failed-panel">
+            <strong>Price approval timed out</strong>
+            <p>The approval window expired without a decision. The partner was released and this prototype order is marked for admin review.</p>
+          </div>
+        ) : null}
+
+        {confirmed && waitingForHorizon ? (
           <div className="checkout-success-panel">
             <strong>Payment confirmed — matching scheduled</strong>
             <p>
@@ -300,7 +407,7 @@ export default function CheckoutPage() {
           </div>
         ) : null}
 
-        {confirmed && !assigned && candidatesReady ? (
+        {confirmed && candidatesReady ? (
           <div className="checkout-success-panel">
             <strong>Offers are live</strong>
             <p>
@@ -309,14 +416,14 @@ export default function CheckoutPage() {
           </div>
         ) : null}
 
-        {confirmed && !assigned && !waitingForHorizon && !candidatesReady && !noCandidates ? (
+        {confirmed && matchingActive && !waitingForHorizon && !candidatesReady && !noCandidates ? (
           <div className="checkout-success-panel">
             <strong>Payment confirmed — finding a partner</strong>
             <p>RouteBite is evaluating verified nearby and on-my-way partners against this delivery window.</p>
           </div>
         ) : null}
 
-        {confirmed && !assigned && noCandidates ? (
+        {confirmed && noCandidates ? (
           <div className="matching-failed-panel">
             <strong>No eligible partner right now</strong>
             <p>

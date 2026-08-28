@@ -69,10 +69,15 @@
   color: var(--color-brand-dark);
 }
 
-.active-delivery-next-step {
+.active-delivery-next-step,
+.active-delivery-waiting,
+.active-delivery-price-form {
   margin-top: 22px;
-  padding: 16px 18px;
+  padding: 18px;
   border-radius: 14px;
+}
+
+.active-delivery-next-step {
   background: rgba(36, 138, 90, 0.08);
   color: var(--color-text-muted);
 }
@@ -81,9 +86,67 @@
   color: var(--color-success);
 }
 
-.active-delivery-next-step p {
-  margin: 6px 0 0;
+.active-delivery-next-step p,
+.active-delivery-waiting p,
+.active-delivery-price-form p {
+  margin: 6px 0 14px;
   line-height: 1.55;
+}
+
+.active-delivery-next-step .primary-button {
+  margin-top: 4px;
+}
+
+.active-delivery-price-form {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+.active-delivery-price-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.active-delivery-price-form input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 13px;
+  border: 1px solid var(--color-border);
+  border-radius: 11px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.active-delivery-price-form input[type='file'] {
+  padding: 10px;
+}
+
+.active-delivery-price-form .primary-button {
+  justify-self: start;
+}
+
+.active-delivery-waiting {
+  border: 1px solid rgba(242, 164, 58, 0.35);
+  background: rgba(242, 164, 58, 0.1);
+  color: var(--color-text-muted);
+}
+
+.active-delivery-waiting strong {
+  color: var(--color-brand-dark);
+}
+
+.active-delivery-waiting small {
+  color: var(--color-text-muted);
+}
+
+.active-delivery-flash {
+  margin: 18px 0 0;
 }
 
 @media (max-width: 560px) {

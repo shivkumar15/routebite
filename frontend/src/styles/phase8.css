@@ -1,0 +1,29 @@
+.price-approval-panel {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid rgba(242, 164, 58, 0.4);
+  border-radius: 16px;
+  background: rgba(242, 164, 58, 0.1);
+  color: var(--color-text-muted);
+}
+
+.price-approval-panel > strong {
+  color: var(--color-brand-dark);
+}
+
+.price-approval-panel p {
+  margin: 8px 0;
+  line-height: 1.65;
+}
+
+.price-approval-panel small {
+  display: block;
+  line-height: 1.5;
+}
+
+.price-approval-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}

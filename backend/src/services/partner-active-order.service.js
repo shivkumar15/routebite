@@ -26,6 +26,19 @@ function toPartnerActiveOrder(order) {
     deliveryWindowEnd: order.deliveryWindowEnd,
     assignedTripId: order.assignedTripId?.toString?.() ?? null,
     expectedEarningPaise: order.pricing.partnerBaseEarningPaise,
+    estimatedFoodCostPaise: order.pricing.estimatedFoodCostPaise,
+    finalCustomerTotalPaise: order.pricing.finalCustomerTotalPaise ?? null,
+    priceAdjustment: {
+      status: order.priceAdjustment?.status ?? 'NONE',
+      actualFoodCostPaise: order.priceAdjustment?.actualFoodCostPaise ?? null,
+      differencePaise: order.priceAdjustment?.differencePaise ?? null,
+      receiptAttached: Boolean(order.priceAdjustment?.receiptAssetId),
+      reportedAt: order.priceAdjustment?.reportedAt ?? null,
+      approvalExpiresAt: order.priceAdjustment?.approvalExpiresAt ?? null,
+      resolvedAt: order.priceAdjustment?.resolvedAt ?? null,
+    },
+    pickupStartedAt: order.pickupStartedAt ?? null,
+    pickedUpAt: order.pickedUpAt ?? null,
     assignedAt: order.updatedAt,
   };
 }
