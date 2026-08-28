@@ -4,7 +4,8 @@ import api from '../../api/axios.js';
 
 function money(paise) {
   if (paise == null) return '—';
-  return `₹${(Number(paise) / 100).toFixed(2)}`;
+  const amount = Number(paise) / 100;
+  return amount < 0 ? `-₹${Math.abs(amount).toFixed(2)}` : `₹${amount.toFixed(2)}`;
 }
 
 function when(value) {
@@ -43,12 +44,17 @@ export default function AdminOrderDetailPage() {
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setError('');
+
     api.get(`/admin/orders/${orderId}`)
       .then(({ data }) => {
         if (active) setDetail(data.data);
       })
       .catch((requestError) => {
-        if (active) setError(requestError.response?.data?.error?.message ?? 'Could not load this order.');
+        if (active) {
+          setError(requestError.response?.data?.error?.message ?? 'Could not load this order.');
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -70,7 +76,17 @@ export default function AdminOrderDetailPage() {
     );
   }
 
-  const { order, customer, assignedPartner, payments, matchingAttempts, offers, earning, timeline } = detail;
+  const {
+    order,
+    customer,
+    assignedPartner,
+    payments,
+    matchingAttempts,
+    offers,
+    earning,
+    demoLedger,
+    timeline,
+  } = detail;
 
   return (
     <main className="admin-ops-shell">
@@ -81,7 +97,7 @@ export default function AdminOrderDetailPage() {
             <span>Order #{order.shortId}</span>
           </div>
           <h1>{order.vendorDisplayName}</h1>
-          <p>{order.pickup?.label} <span>→</span> {order.drop?.label}</p>
+          <p>{order.pickup?.label ?? 'Pickup unavailable'} <span>→</span> {order.drop?.label ?? 'Drop unavailable'}</p>
         </div>
         <div className="admin-ops-nav">
           <Link className="secondary-link" to="/admin/orders">Order queue</Link>
@@ -110,8 +126,14 @@ export default function AdminOrderDetailPage() {
             <DataRow label="Pickup instructions" value={order.pickupInstructions || 'None'} />
             <DataRow label="Delivery type" value={order.deliveryType} />
             <DataRow label="Delivery window" value={`${when(order.deliveryWindowStart)} → ${when(order.deliveryWindowEnd)}`} />
-            <DataRow label="Pickup coordinates" value={`${order.pickup.latitude}, ${order.pickup.longitude}`} />
-            <DataRow label="Drop coordinates" value={`${order.drop.latitude}, ${order.drop.longitude}`} />
+            <DataRow
+              label="Pickup coordinates"
+              value={order.pickup ? `${order.pickup.latitude}, ${order.pickup.longitude}` : 'Unavailable'}
+            />
+            <DataRow
+              label="Drop coordinates"
+              value={order.drop ? `${order.drop.latitude}, ${order.drop.longitude}` : 'Unavailable'}
+            />
           </div>
         </article>
 
@@ -147,9 +169,22 @@ export default function AdminOrderDetailPage() {
             <div><span>Delivery charge</span><strong>{money(order.pricing.customerDeliveryChargePaise)}</strong></div>
             <div><span>Platform fee</span><strong>{money(order.pricing.platformFeePaise)}</strong></div>
             <div><span>Estimated total</span><strong>{money(order.pricing.estimatedCustomerTotalPaise)}</strong></div>
-            <div><span>Final demo total</span><strong>{money(order.pricing.finalCustomerTotalPaise)}</strong></div>
+            <div><span>Current demo total</span><strong>{money(demoLedger?.customer?.currentDemoTotalPaise)}</strong></div>
             <div><span>Partner earning</span><strong>{money(earning?.totalEarningPaise)}</strong></div>
           </div>
+
+          <div className="admin-fact-grid">
+            <DataRow label="Demo outcome" value={readable(demoLedger?.outcome)} />
+            <DataRow label="Confirmed test payment" value={money(demoLedger?.customer?.testPaymentPaise)} />
+            <DataRow label="Net order adjustment" value={money(demoLedger?.customer?.adjustmentPaise)} />
+            <DataRow label="Demo refund represented" value={money(demoLedger?.customer?.demoRefundPaise)} />
+            <DataRow label="Refund state" value={readable(demoLedger?.refund?.status)} />
+            <DataRow label="Settlement state" value={readable(demoLedger?.settlement?.status)} />
+          </div>
+
+          {demoLedger?.refund?.reason ? (
+            <div className="admin-inline-warning">{demoLedger.refund.reason}</div>
+          ) : null}
 
           <div className="admin-sublist">
             {payments.map((payment) => (
@@ -200,7 +235,7 @@ export default function AdminOrderDetailPage() {
           {offers.length === 0 ? <p className="admin-muted">No partner offer was dispatched.</p> : null}
           <div className="admin-offer-table-wrap">
             <table className="admin-offer-table">
-              <thead><tr><th>Partner</th><th>Mode</th><th>Rank</th><th>Status</th><th>Created</th><th>Resolved</th></tr></thead>
+              <thead><tr><th>Partner</th><th>Mode</th><th>Rank</th><th>Status</th><th>Created</th><th>Resolved / expires</th></tr></thead>
               <tbody>
                 {offers.map((offer) => (
                   <tr key={offer.id}>
@@ -209,7 +244,7 @@ export default function AdminOrderDetailPage() {
                     <td>{offer.rankPosition}</td>
                     <td><span className={`admin-status-pill offer-${offer.status.toLowerCase()}`}>{readable(offer.status)}</span></td>
                     <td>{when(offer.createdAt)}</td>
-                    <td>{when(offer.respondedAt || offer.expiresAt)}</td>
+                    <td>{offer.respondedAt ? when(offer.respondedAt) : `Expires ${when(offer.expiresAt)}`}</td>
                   </tr>
                 ))}
               </tbody>
@@ -222,7 +257,7 @@ export default function AdminOrderDetailPage() {
           <div className="admin-stack-data">
             <DataRow label="Status" value={readable(order.priceAdjustment.status)} />
             <DataRow label="Actual food cost" value={money(order.priceAdjustment.actualFoodCostPaise)} />
-            <DataRow label="Difference" value={order.priceAdjustment.differencePaise == null ? '—' : money(order.priceAdjustment.differencePaise)} />
+            <DataRow label="Difference" value={money(order.priceAdjustment.differencePaise)} />
             <DataRow label="Reported" value={when(order.priceAdjustment.reportedAt)} />
             <DataRow label="Resolved" value={when(order.priceAdjustment.resolvedAt)} />
           </div>
