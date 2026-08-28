@@ -88,7 +88,7 @@ describe('Phase 10 delivery OTP and completion invariants', () => {
 
   test('one earning per order is enforced by a unique index', () => {
     const index = PartnerEarning.schema.indexes().find(
-      ([keys], options]) => keys.orderId === 1 && options.unique === true,
+      ([keys, options]) => keys.orderId === 1 && options.unique === true,
     );
     expect(index).toBeDefined();
   });
