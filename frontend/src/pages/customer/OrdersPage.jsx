@@ -17,6 +17,10 @@ function postPaymentActionLabel(status) {
   return 'View order';
 }
 
+function ledgerActionLabel(status) {
+  return status === 'MATCHING_FAILED' ? 'View demo refund' : 'View demo ledger';
+}
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +49,7 @@ export default function OrdersPage() {
           <div>
             <p className="eyebrow">Your RouteBite requests</p>
             <h1>Food requests</h1>
-            <p className="form-intro">Draft requests can now enter Razorpay Test Mode checkout. Matching begins only after backend payment confirmation.</p>
+            <p className="form-intro">Follow each request from Razorpay Test Mode payment through delivery, then inspect RouteBite's demo accounting after completion or matching failure.</p>
           </div>
           <div className="order-heading-actions">
             <Link className="secondary-link" to="/account">Account</Link>
@@ -69,6 +73,7 @@ export default function OrdersPage() {
             const canPay = ['DRAFT', 'AWAITING_PAYMENT'].includes(order.status);
             const postPayment = !canPay;
             const needsImmediateAction = ['OUT_FOR_DELIVERY', 'DELIVERY_OTP_REQUIRED'].includes(order.status);
+            const hasDemoLedger = ['COMPLETED', 'MATCHING_FAILED'].includes(order.status);
 
             return (
               <article className="order-summary-card" key={order.id}>
@@ -103,6 +108,11 @@ export default function OrdersPage() {
                       to={`/orders/${order.id}/checkout`}
                     >
                       {postPaymentActionLabel(order.status)}
+                    </Link>
+                  ) : null}
+                  {hasDemoLedger ? (
+                    <Link className="primary-link" to={`/orders/${order.id}/ledger`}>
+                      {ledgerActionLabel(order.status)}
                     </Link>
                   ) : null}
                 </div>

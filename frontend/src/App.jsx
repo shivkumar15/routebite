@@ -4,11 +4,13 @@ import LoginPage from './pages/auth/LoginPage.jsx';
 import RegisterPage from './pages/auth/RegisterPage.jsx';
 import AccountPage from './pages/customer/AccountPage.jsx';
 import CheckoutPage from './pages/customer/CheckoutPage.jsx';
+import DemoLedgerPage from './pages/customer/DemoLedgerPage.jsx';
 import HomePage from './pages/customer/HomePage.jsx';
 import OrderDraftPage from './pages/customer/OrderDraftPage.jsx';
 import OrdersPage from './pages/customer/OrdersPage.jsx';
 import PartnerApplyPage from './pages/partner/PartnerApplyPage.jsx';
 import PartnerDashboardPage from './pages/partner/PartnerDashboardPage.jsx';
+import PartnerEarningsPage from './pages/partner/PartnerEarningsPage.jsx';
 import PartnerOffersPage from './pages/partner/PartnerOffersPage.jsx';
 import AdminRoute from './routes/AdminRoute.jsx';
 import PartnerRoute from './routes/PartnerRoute.jsx';
@@ -61,6 +63,14 @@ export default function App() {
         }
       />
       <Route
+        path="/orders/:orderId/ledger"
+        element={
+          <ProtectedRoute>
+            <DemoLedgerPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/partner/apply"
         element={
           <ProtectedRoute>
@@ -81,6 +91,14 @@ export default function App() {
         element={
           <PartnerRoute>
             <PartnerOffersPage />
+          </PartnerRoute>
+        }
+      />
+      <Route
+        path="/partner/earnings"
+        element={
+          <PartnerRoute>
+            <PartnerEarningsPage />
           </PartnerRoute>
         }
       />

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { partnerEarnings } from '../controllers/accounting.controller.js';
 import {
   confirmPartnerPickup,
   reportPartnerPrice,
@@ -54,6 +55,7 @@ router.get('/profile', requireAuth, me);
 
 router.get('/operational-state', requireAuth, requireApprovedPartner, operationalState);
 router.get('/active-order', requireAuth, requireApprovedPartner, activeOrder);
+router.get('/earnings', requireAuth, requireApprovedPartner, partnerEarnings);
 router.post('/active-order/start-pickup', requireAuth, requireApprovedPartner, startPartnerPickup);
 router.post(
   '/active-order/actual-price',

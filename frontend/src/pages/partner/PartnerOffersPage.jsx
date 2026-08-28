@@ -126,6 +126,7 @@ export default function PartnerOffersPage() {
         </div>
         <div className="offer-page-actions">
           <Link className="secondary-link" to="/partner">Partner workspace</Link>
+          <Link className="secondary-link" to="/partner/earnings">Demo earnings</Link>
           <Link className="secondary-link" to="/account">Account</Link>
         </div>
       </header>
