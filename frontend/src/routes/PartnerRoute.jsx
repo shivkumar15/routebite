@@ -58,8 +58,21 @@ export default function PartnerRoute({ children }) {
         const location = await getBrowserLocation();
         await api.put('/partner/location', location);
       } catch {
-        // Foreground refresh is best-effort; the backend freshness rule remains authoritative.
+        // Best-effort browser heartbeat. Matching also has a short grace window
+        // because browsers can throttle background tabs.
       }
+    }
+
+    function refreshWhenVisible() {
+      if (document.visibilityState === 'visible') {
+        keepAvailableLocationFresh();
+        refreshOffers();
+      }
+    }
+
+    function refreshWhenFocused() {
+      keepAvailableLocationFresh();
+      refreshOffers();
     }
 
     const handleOfferChange = () => refreshOffers();
@@ -68,14 +81,21 @@ export default function PartnerRoute({ children }) {
     socket.on('offer:expired', handleOfferChange);
     socket.on('offer:cancelled', handleOfferChange);
     socket.on('offer:accepted', handleOfferChange);
+
     refreshOffers();
     keepAvailableLocationFresh();
 
     const locationTimer = window.setInterval(keepAvailableLocationFresh, 15000);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('focus', refreshWhenFocused);
+    window.addEventListener('online', refreshWhenFocused);
 
     return () => {
       active = false;
       window.clearInterval(locationTimer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('focus', refreshWhenFocused);
+      window.removeEventListener('online', refreshWhenFocused);
       socket.off('offer:new', handleOfferChange);
       socket.off('offer:expired', handleOfferChange);
       socket.off('offer:cancelled', handleOfferChange);
