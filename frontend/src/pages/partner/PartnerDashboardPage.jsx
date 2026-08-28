@@ -15,7 +15,7 @@ const EMPTY_TRIP_FORM = {
   departureFlexMinutes: '15',
 };
 
-function getBrowserLocation() {
+function getBrowserLocation({ maximumAge = 15000 } = {}) {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Location is not supported by this browser.'));
@@ -34,7 +34,7 @@ function getBrowserLocation() {
       {
         enableHighAccuracy: true,
         timeout: 12000,
-        maximumAge: 15000,
+        maximumAge,
       },
     );
   });
@@ -62,6 +62,7 @@ export default function PartnerDashboardPage() {
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [trackingIssue, setTrackingIssue] = useState('');
 
   const activeTrip = useMemo(
     () => trips.find((trip) => trip.status === 'TRIP_ACTIVE') ?? null,
@@ -92,6 +93,55 @@ export default function PartnerDashboardPage() {
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  useEffect(() => {
+    if (activeOrder?.status !== 'OUT_FOR_DELIVERY') {
+      setTrackingIssue('');
+      return undefined;
+    }
+
+    let active = true;
+
+    async function pushDeliveryLocation() {
+      try {
+        const location = await getBrowserLocation({ maximumAge: 3000 });
+        const { data } = await api.put('/partner/active-order/location', location);
+        if (!active) return;
+        const latest = data.data.tracking.location;
+        if (latest) {
+          setOperational((current) =>
+            current
+              ? {
+                  ...current,
+                  currentLocation: {
+                    latitude: latest.latitude,
+                    longitude: latest.longitude,
+                    accuracyMeters: latest.accuracyMeters,
+                    updatedAt: latest.updatedAt,
+                  },
+                }
+              : current,
+          );
+        }
+        setTrackingIssue('');
+      } catch (locationError) {
+        if (!active) return;
+        setTrackingIssue(
+          locationError.response?.data?.error?.message ??
+            locationError.message ??
+            'Live delivery location could not be updated.',
+        );
+      }
+    }
+
+    pushDeliveryLocation();
+    const timer = window.setInterval(pushDeliveryLocation, 12000);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [activeOrder?.id, activeOrder?.status]);
 
   async function saveCurrentLocation({ quiet = false } = {}) {
     const location = await getBrowserLocation();
@@ -265,8 +315,9 @@ export default function PartnerDashboardPage() {
 
       {message ? <p className="success-message partner-flash">{message}</p> : null}
       {error ? <p className="form-error partner-flash">{error}</p> : null}
+      {trackingIssue ? <p className="form-error partner-flash">Tracking: {trackingIssue}</p> : null}
 
-      <ActiveDeliveryCard order={activeOrder} />
+      <ActiveDeliveryCard order={activeOrder} onOrderChange={setActiveOrder} />
 
       <section className="partner-mode-grid">
         <article className={`partner-mode-card ${isAvailable ? 'is-live' : ''}`}>

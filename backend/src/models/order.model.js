@@ -184,6 +184,7 @@ const orderSchema = new mongoose.Schema(
     },
     pickupStartedAt: { type: Date, default: null },
     pickedUpAt: { type: Date, default: null },
+    deliveryStartedAt: { type: Date, default: null },
   },
   {
     timestamps: true,

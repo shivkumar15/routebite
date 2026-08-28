@@ -59,6 +59,13 @@ describe('order route contract', () => {
     expect(response.body.error.code).toBe('AUTH_REQUIRED');
   });
 
+  test('reading live tracking requires authentication', async () => {
+    const response = await request(app)
+      .get('/api/v1/orders/507f1f77bcf86cd799439011/tracking');
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
+
   test('price increase approval requires authentication', async () => {
     const response = await request(app)
       .post('/api/v1/orders/507f1f77bcf86cd799439011/price-adjustment/approve');

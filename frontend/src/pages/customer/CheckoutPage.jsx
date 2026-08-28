@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../../api/axios.js';
+import LiveTrackingCard from '../../components/customer/LiveTrackingCard.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { socket } from '../../socket/socket.js';
 
@@ -47,21 +48,24 @@ export default function CheckoutPage() {
   const [order, setOrder] = useState(null);
   const [payment, setPayment] = useState(null);
   const [matching, setMatching] = useState(null);
+  const [tracking, setTracking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
   const loadState = useCallback(async () => {
-    const [orderResponse, paymentResponse, matchingResponse] = await Promise.all([
+    const [orderResponse, paymentResponse, matchingResponse, trackingResponse] = await Promise.all([
       api.get(`/orders/${orderId}`),
       api.get(`/orders/${orderId}/payment`),
       api.get(`/orders/${orderId}/matching`),
+      api.get(`/orders/${orderId}/tracking`),
     ]);
 
     setOrder(orderResponse.data.data.order);
     setPayment(paymentResponse.data.data.payment);
     setMatching(matchingResponse.data.data.matching);
+    setTracking(trackingResponse.data.data.tracking);
   }, [orderId]);
 
   useEffect(() => {
@@ -69,15 +73,17 @@ export default function CheckoutPage() {
 
     async function load() {
       try {
-        const [orderResponse, paymentResponse, matchingResponse] = await Promise.all([
+        const [orderResponse, paymentResponse, matchingResponse, trackingResponse] = await Promise.all([
           api.get(`/orders/${orderId}`),
           api.get(`/orders/${orderId}/payment`),
           api.get(`/orders/${orderId}/matching`),
+          api.get(`/orders/${orderId}/tracking`),
         ]);
         if (!active) return;
         setOrder(orderResponse.data.data.order);
         setPayment(paymentResponse.data.data.payment);
         setMatching(matchingResponse.data.data.matching);
+        setTracking(trackingResponse.data.data.tracking);
       } catch (requestError) {
         if (active) {
           setError(requestError.response?.data?.error?.message ?? 'Could not load checkout.');
@@ -116,8 +122,27 @@ export default function CheckoutPage() {
       refreshForEvent(payload, 'The actual food price has been recorded.');
     const onPickedUp = (payload) =>
       refreshForEvent(payload, 'Your partner confirmed that the food has been picked up.');
+    const onDeliveryStarted = (payload) =>
+      refreshForEvent(payload, 'Your partner started the delivery. Live location is now active.');
     const onPriceTimedOut = (payload) =>
       refreshForEvent(payload, 'Price approval timed out and this order needs review.');
+    const onDeliveryLocation = (payload) => {
+      if (payload?.orderId !== orderId) return;
+      setTracking((current) => ({
+        ...(current ?? {}),
+        orderId,
+        status: payload.status,
+        active: true,
+        location: payload.location,
+      }));
+    };
+    const onConnected = async () => {
+      try {
+        await loadState();
+      } catch {
+        // A later user refresh can recover if reconnect-time REST also fails.
+      }
+    };
 
     socket.connect();
     socket.on('matching:offers-dispatched', onOffersDispatched);
@@ -127,7 +152,10 @@ export default function CheckoutPage() {
     socket.on('price:approval-required', onPriceApprovalRequired);
     socket.on('price:resolved', onPriceResolved);
     socket.on('order:picked-up', onPickedUp);
+    socket.on('order:delivery-started', onDeliveryStarted);
+    socket.on('delivery:location', onDeliveryLocation);
     socket.on('price:timed-out', onPriceTimedOut);
+    socket.on('system:connected', onConnected);
 
     return () => {
       socket.off('matching:offers-dispatched', onOffersDispatched);
@@ -137,7 +165,10 @@ export default function CheckoutPage() {
       socket.off('price:approval-required', onPriceApprovalRequired);
       socket.off('price:resolved', onPriceResolved);
       socket.off('order:picked-up', onPickedUp);
+      socket.off('order:delivery-started', onDeliveryStarted);
+      socket.off('delivery:location', onDeliveryLocation);
       socket.off('price:timed-out', onPriceTimedOut);
+      socket.off('system:connected', onConnected);
       socket.disconnect();
     };
   }, [loadState, orderId]);
@@ -325,7 +356,7 @@ export default function CheckoutPage() {
 
         <div className="test-payment-note">
           <strong>Prototype payment</strong>
-          <p>This uses Razorpay Test Mode. Price changes in Phase 8 update RouteBite's demo accounting only; no live extra charge or refund is moved.</p>
+          <p>This uses Razorpay Test Mode. Price changes update RouteBite's demo accounting only; no live extra charge or refund is moved.</p>
         </div>
 
         {payment ? (
@@ -380,8 +411,18 @@ export default function CheckoutPage() {
         {confirmed && order.status === 'PICKED_UP' ? (
           <div className="checkout-success-panel">
             <strong>Food picked up</strong>
-            <p>Your partner confirmed that the food is physically collected. Live delivery tracking begins in the next phase.</p>
+            <p>Your partner has the food. Live tracking will begin when they press Start delivery.</p>
           </div>
+        ) : null}
+
+        {confirmed && order.status === 'OUT_FOR_DELIVERY' ? (
+          <>
+            <div className="checkout-success-panel">
+              <strong>Your food is on the way</strong>
+              <p>The partner started delivery. Foreground location updates are shared while the active delivery page remains open.</p>
+            </div>
+            <LiveTrackingCard tracking={tracking} dropLabel={order.drop.label} />
+          </>
         ) : null}
 
         {confirmed && order.status === 'CANCELLED' && adjustment.status === 'REJECTED' ? (

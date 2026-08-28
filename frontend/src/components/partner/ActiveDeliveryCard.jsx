@@ -14,13 +14,18 @@ function rupeesToPaise(value) {
   return Number.isSafeInteger(paise) ? paise : null;
 }
 
-export default function ActiveDeliveryCard({ order: initialOrder }) {
+export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange }) {
   const [order, setOrder] = useState(initialOrder);
   const [actualPrice, setActualPrice] = useState('');
   const [receiptFile, setReceiptFile] = useState(null);
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  function applyOrder(nextOrder) {
+    setOrder(nextOrder);
+    onOrderChange?.(nextOrder);
+  }
 
   useEffect(() => {
     setOrder(initialOrder);
@@ -46,7 +51,7 @@ export default function ActiveDeliveryCard({ order: initialOrder }) {
           window.location.reload();
           return;
         }
-        setOrder(data.data.order);
+        applyOrder(data.data.order);
         if (payload.status === 'PARTNER_TO_PICKUP') {
           setMessage('Customer approved the higher food price.');
         }
@@ -64,7 +69,7 @@ export default function ActiveDeliveryCard({ order: initialOrder }) {
       socket.off('price:rejected', refreshForPriceEvent);
       socket.off('price:timed-out', refreshForPriceEvent);
     };
-  }, [order]);
+  }, [order, onOrderChange]);
 
   if (!order) return null;
 
@@ -74,7 +79,7 @@ export default function ActiveDeliveryCard({ order: initialOrder }) {
     setMessage('');
     try {
       const { data } = await api.post(path);
-      setOrder(data.data.order);
+      applyOrder(data.data.order);
       setMessage(successMessage);
     } catch (requestError) {
       setError(
@@ -112,7 +117,7 @@ export default function ActiveDeliveryCard({ order: initialOrder }) {
         actualFoodCostPaise,
         receiptAssetId,
       });
-      setOrder(data.data.order);
+      applyOrder(data.data.order);
       setMessage(
         data.data.order.status === 'PRICE_CONFIRMATION_REQUIRED'
           ? 'Higher price sent to the customer for approval.'
@@ -260,7 +265,22 @@ export default function ActiveDeliveryCard({ order: initialOrder }) {
       {order.status === 'PICKED_UP' ? (
         <div className="active-delivery-next-step">
           <strong>Food picked up</strong>
-          <p>The order is now PICKED_UP. Live delivery movement and customer tracking continue in Phase 9.</p>
+          <p>Start delivery when you are leaving the food place. Foreground GPS sharing begins only after this action.</p>
+          <button
+            className="primary-button"
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => runAction('/partner/active-order/start-delivery', 'Live delivery started. Keep this page open for tracking.')}
+          >
+            {busy ? 'Starting delivery…' : 'Start delivery'}
+          </button>
+        </div>
+      ) : null}
+
+      {order.status === 'OUT_FOR_DELIVERY' ? (
+        <div className="active-delivery-next-step live-tracking-partner-panel">
+          <strong>Live delivery tracking is active</strong>
+          <p>Keep this partner page open while travelling. RouteBite sends your foreground location roughly every 12 seconds; delivery OTP and completion come in Phase 10.</p>
         </div>
       ) : null}
     </section>

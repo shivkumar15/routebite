@@ -39,6 +39,7 @@ function toPartnerActiveOrder(order) {
     },
     pickupStartedAt: order.pickupStartedAt ?? null,
     pickedUpAt: order.pickedUpAt ?? null,
+    deliveryStartedAt: order.deliveryStartedAt ?? null,
     assignedAt: order.updatedAt,
   };
 }

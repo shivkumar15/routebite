@@ -10,6 +10,14 @@ function formatDate(value) {
   return new Date(value).toLocaleString();
 }
 
+function postPaymentActionLabel(status) {
+  if (status === 'OUT_FOR_DELIVERY' || status === 'DELIVERY_OTP_REQUIRED') {
+    return 'Track delivery';
+  }
+  if (status === 'MATCHING') return 'Matching details';
+  return 'View order';
+}
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +68,7 @@ export default function OrdersPage() {
         <div className="order-list">
           {orders.map((order) => {
             const canPay = ['DRAFT', 'AWAITING_PAYMENT'].includes(order.status);
-            const paymentConfirmed = order.status === 'MATCHING';
+            const postPayment = !canPay;
 
             return (
               <article className="order-summary-card" key={order.id}>
@@ -89,8 +97,13 @@ export default function OrdersPage() {
                       {order.status === 'DRAFT' ? 'Review & pay' : 'Continue payment'}
                     </Link>
                   ) : null}
-                  {paymentConfirmed ? (
-                    <Link className="secondary-link" to={`/orders/${order.id}/checkout`}>Payment details</Link>
+                  {postPayment ? (
+                    <Link
+                      className={order.status === 'OUT_FOR_DELIVERY' ? 'primary-link' : 'secondary-link'}
+                      to={`/orders/${order.id}/checkout`}
+                    >
+                      {postPaymentActionLabel(order.status)}
+                    </Link>
                   ) : null}
                 </div>
               </article>

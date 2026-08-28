@@ -7,6 +7,7 @@ import {
   paymentStatus,
   verifyPayment,
 } from '../controllers/payment.controller.js';
+import { customerTracking } from '../controllers/tracking.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { validateRequest } from '../middleware/validate.middleware.js';
 import { orderDraftValidators, orderIdValidators } from '../validators/order.validators.js';
@@ -26,6 +27,7 @@ router.post('/:orderId/payment', createPaymentValidators, validateRequest, creat
 router.get('/:orderId/payment', paymentStatusValidators, validateRequest, paymentStatus);
 router.post('/:orderId/payment/verify', verifyPaymentValidators, validateRequest, verifyPayment);
 router.get('/:orderId/matching', orderIdValidators, validateRequest, matchingDetail);
+router.get('/:orderId/tracking', orderIdValidators, validateRequest, customerTracking);
 router.post(
   '/:orderId/price-adjustment/approve',
   orderIdValidators,
