@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 function formatDistance(meters) {
   if (!Number.isFinite(meters)) return '—';
   if (meters < 1000) return `${Math.max(0, Math.round(meters))} m`;
@@ -14,9 +16,21 @@ function formatTime(value) {
 }
 
 export default function LiveTrackingCard({ tracking, dropLabel }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!tracking?.active) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 5000);
+    return () => window.clearInterval(timer);
+  }, [tracking?.active]);
+
   if (!tracking?.active) return null;
 
   const location = tracking.location;
+  const clientStale = Boolean(
+    location?.updatedAt && now - new Date(location.updatedAt).getTime() > 45000,
+  );
+  const stale = Boolean(location?.stale || clientStale);
 
   return (
     <section className="live-tracking-card" aria-live="polite">
@@ -25,9 +39,9 @@ export default function LiveTrackingCard({ tracking, dropLabel }) {
           <p className="eyebrow">Live delivery</p>
           <h3>Partner is on the way</h3>
         </div>
-        <span className={`live-tracking-badge ${location?.stale ? 'is-stale' : ''}`}>
+        <span className={`live-tracking-badge ${stale ? 'is-stale' : ''}`}>
           <span aria-hidden="true" />
-          {location?.stale ? 'Location delayed' : 'Live'}
+          {stale ? 'Location delayed' : 'Live'}
         </span>
       </div>
 
