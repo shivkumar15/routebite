@@ -6,6 +6,14 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { socket } from '../../socket/socket.js';
 
 const RAZORPAY_CHECKOUT_SRC = 'https://checkout.razorpay.com/v1/checkout.js';
+const CANCELLABLE_STATUSES = new Set([
+  'DRAFT',
+  'AWAITING_PAYMENT',
+  'MATCHING',
+  'ASSIGNED',
+  'PARTNER_TO_PICKUP',
+  'PRICE_CONFIRMATION_REQUIRED',
+]);
 
 function formatMoney(paise) {
   return `₹${(Number(paise) / 100).toFixed(2)}`;
@@ -324,6 +332,34 @@ export default function CheckoutPage() {
     }
   }
 
+  async function handleCancelOrder() {
+    const confirmedCancel = window.confirm(
+      'Cancel this RouteBite request? Automatic cancellation is only allowed before food pickup.',
+    );
+    if (!confirmedCancel) return;
+
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const { data } = await api.post(`/orders/${orderId}/cancel`, {
+        reason: 'Customer cancelled from order details.',
+      });
+      setOrder(data.data.order);
+      setMatching(null);
+      setTracking(null);
+      setRevealedOtp(null);
+      setMessage('Request cancelled before food pickup. Demo refund accounting is now available.');
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.error?.message ??
+          'Could not cancel this request.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) {
     return <main className="order-shell"><p>Loading checkout…</p></main>;
   }
@@ -344,6 +380,7 @@ export default function CheckoutPage() {
   const otpState = order.deliveryOtp ?? {};
   const confirmed = payment?.status === 'PAYMENT_CONFIRMED';
   const payable = ['DRAFT', 'AWAITING_PAYMENT'].includes(order.status);
+  const canCancel = CANCELLABLE_STATUSES.has(order.status);
   const matchingActive = order.status === 'MATCHING';
   const waitingForHorizon = matchingActive && matching?.status === 'WAITING_FOR_HORIZON';
   const candidatesReady = matchingActive && matching?.status === 'CANDIDATES_READY';
@@ -506,10 +543,20 @@ export default function CheckoutPage() {
           </div>
         ) : null}
 
+        {order.status === 'CANCELLED' && adjustment.status !== 'REJECTED' ? (
+          <div className="matching-failed-panel">
+            <strong>Request cancelled</strong>
+            <p>{order.recovery?.reason || 'This request was cancelled before food pickup.'}</p>
+            {confirmed ? (
+              <Link className="primary-link" to={`/orders/${orderId}/ledger`}>View demo refund</Link>
+            ) : null}
+          </div>
+        ) : null}
+
         {confirmed && order.status === 'ADMIN_REVIEW_REQUIRED' ? (
           <div className="matching-failed-panel">
-            <strong>Price approval timed out</strong>
-            <p>The approval window expired without a decision. The partner was released and this prototype order is marked for admin review.</p>
+            <strong>Order needs review</strong>
+            <p>{order.recovery?.reason || 'This order needs operations review before the prototype can resolve its financial outcome.'}</p>
           </div>
         ) : null}
 
@@ -559,6 +606,12 @@ export default function CheckoutPage() {
         {!confirmed && payable ? (
           <button className="primary-button checkout-pay-button" type="button" disabled={busy} onClick={handlePay}>
             {busy ? 'Preparing test checkout…' : `Pay & Find Partner · ${formatMoney(pricing.estimatedCustomerTotalPaise)}`}
+          </button>
+        ) : null}
+
+        {canCancel ? (
+          <button className="secondary-button checkout-pay-button" type="button" disabled={busy} onClick={handleCancelOrder}>
+            {busy ? 'Working…' : 'Cancel request'}
           </button>
         ) : null}
 
