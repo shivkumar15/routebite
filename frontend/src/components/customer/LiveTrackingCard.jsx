@@ -6,6 +6,18 @@ function formatDistance(meters) {
   return `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
 }
 
+function formatDistanceWithAccuracy(distanceMeters, accuracyMeters) {
+  if (!Number.isFinite(distanceMeters)) return '—';
+  if (
+    Number.isFinite(accuracyMeters) &&
+    accuracyMeters > 0 &&
+    distanceMeters <= accuracyMeters
+  ) {
+    return `Near drop · GPS ± ${Math.round(accuracyMeters)} m`;
+  }
+  return formatDistance(distanceMeters);
+}
+
 function formatTime(value) {
   if (!value) return 'Waiting for first GPS update';
   return new Date(value).toLocaleTimeString([], {
@@ -67,7 +79,12 @@ export default function LiveTrackingCard({ tracking, dropLabel }) {
           </div>
           <div>
             <span>Approx. distance to {dropLabel || 'drop'}</span>
-            <strong>{formatDistance(location.distanceToDropMeters)}</strong>
+            <strong>
+              {formatDistanceWithAccuracy(
+                location.distanceToDropMeters,
+                location.accuracyMeters,
+              )}
+            </strong>
           </div>
           <div>
             <span>GPS accuracy</span>
@@ -85,7 +102,7 @@ export default function LiveTrackingCard({ tracking, dropLabel }) {
       )}
 
       <p className="live-tracking-note">
-        Distance is a straight-line approximation for the prototype. RouteBite does not call Google Routes on every GPS update.
+        Distance is a straight-line approximation for the prototype and is interpreted together with browser GPS accuracy. RouteBite does not call Google Routes on every GPS update.
       </p>
     </section>
   );
