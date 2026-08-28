@@ -18,6 +18,10 @@ import {
   updateLocation,
 } from '../controllers/partner.controller.js';
 import {
+  startPartnerDelivery,
+  updatePartnerDeliveryLocation,
+} from '../controllers/tracking.controller.js';
+import {
   cancel,
   complete,
   create,
@@ -53,6 +57,15 @@ router.post(
   reportPartnerPrice,
 );
 router.post('/active-order/confirm-pickup', requireAuth, requireApprovedPartner, confirmPartnerPickup);
+router.post('/active-order/start-delivery', requireAuth, requireApprovedPartner, startPartnerDelivery);
+router.put(
+  '/active-order/location',
+  requireAuth,
+  requireApprovedPartner,
+  partnerLocationValidators,
+  validateRequest,
+  updatePartnerDeliveryLocation,
+);
 router.patch(
   '/availability',
   requireAuth,
