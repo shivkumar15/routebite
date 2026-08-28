@@ -1,4 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
+import AdminOrderDetailPage from './pages/admin/AdminOrderDetailPage.jsx';
+import AdminOrdersPage from './pages/admin/AdminOrdersPage.jsx';
 import PartnerReviewPage from './pages/admin/PartnerReviewPage.jsx';
 import LoginPage from './pages/auth/LoginPage.jsx';
 import RegisterPage from './pages/auth/RegisterPage.jsx';
@@ -100,6 +102,22 @@ export default function App() {
           <PartnerRoute>
             <PartnerEarningsPage />
           </PartnerRoute>
+        }
+      />
+      <Route
+        path="/admin/orders"
+        element={
+          <AdminRoute>
+            <AdminOrdersPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/orders/:orderId"
+        element={
+          <AdminRoute>
+            <AdminOrderDetailPage />
+          </AdminRoute>
         }
       />
       <Route

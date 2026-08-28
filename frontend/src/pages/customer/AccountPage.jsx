@@ -142,9 +142,12 @@ export default function AccountPage() {
 
         {isAdmin ? (
           <section className="account-section">
-            <h2>Admin</h2>
-            <p className="form-intro">Admin accounts are reserved for RouteBite operations and cannot participate as delivery partners.</p>
-            <Link className="primary-link" to="/admin/partners">Review partner applications</Link>
+            <h2>Admin operations</h2>
+            <p className="form-intro">Inspect order failures, payment and matching state, and partner verification without editing MongoDB directly.</p>
+            <div className="account-action-row">
+              <Link className="primary-link" to="/admin/orders">Open order operations</Link>
+              <Link className="secondary-link" to="/admin/partners">Review partner applications</Link>
+            </div>
           </section>
         ) : null}
 
