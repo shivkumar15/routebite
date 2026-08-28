@@ -93,6 +93,17 @@ const priceAdjustmentSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const deliveryOtpSchema = new mongoose.Schema(
+  {
+    hash: { type: String, default: null, select: false },
+    generatedAt: { type: Date, default: null },
+    expiresAt: { type: Date, default: null },
+    attempts: { type: Number, default: 0, min: 0 },
+    usedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
 const orderSchema = new mongoose.Schema(
   {
     customerId: {
@@ -182,9 +193,17 @@ const orderSchema = new mongoose.Schema(
       default: () => ({}),
       required: true,
     },
+    deliveryOtp: {
+      type: deliveryOtpSchema,
+      default: () => ({}),
+      required: true,
+    },
     pickupStartedAt: { type: Date, default: null },
     pickedUpAt: { type: Date, default: null },
     deliveryStartedAt: { type: Date, default: null },
+    deliveryOtpRequestedAt: { type: Date, default: null },
+    deliveredAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
@@ -197,5 +216,6 @@ orderSchema.index({ pickup: '2dsphere' });
 orderSchema.index({ drop: '2dsphere' });
 orderSchema.index({ status: 1, deliveryWindowStart: 1 });
 orderSchema.index({ status: 1, 'priceAdjustment.approvalExpiresAt': 1 });
+orderSchema.index({ status: 1, 'deliveryOtp.expiresAt': 1 });
 
 export const Order = mongoose.model('Order', orderSchema);
