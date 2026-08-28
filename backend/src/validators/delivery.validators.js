@@ -9,3 +9,10 @@ export const actualFoodPriceValidators = [
     .isMongoId()
     .withMessage('Receipt asset id is invalid.'),
 ];
+
+export const deliveryOtpValidators = [
+  body('otp')
+    .isString()
+    .matches(/^\d{6}$/)
+    .withMessage('Delivery OTP must be a 6-digit code.'),
+];
