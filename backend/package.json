@@ -9,9 +9,10 @@
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand",
     "admin:promote": "node scripts/promote-admin.js",
     "matching:diagnose": "node scripts/diagnose-latest-matching.js",
-    "hardening:syntax": "node --check scripts/audit-prototype-state.js && node --check scripts/rehearse-offer-accept-race.js",
+    "hardening:syntax": "node --check scripts/audit-prototype-state.js && node --check scripts/rehearse-offer-accept-race.js && node --check scripts/rehearse-offer-restart.js",
     "hardening:audit": "node scripts/audit-prototype-state.js",
-    "hardening:accept-race": "node scripts/rehearse-offer-accept-race.js"
+    "hardening:accept-race": "node scripts/rehearse-offer-accept-race.js",
+    "hardening:restart-offer": "node scripts/rehearse-offer-restart.js"
   },
   "dependencies": {
     "axios": "latest",
