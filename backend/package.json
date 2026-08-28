@@ -8,7 +8,8 @@
     "start": "node server.js",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand",
     "admin:promote": "node scripts/promote-admin.js",
-    "matching:diagnose": "node scripts/diagnose-latest-matching.js"
+    "matching:diagnose": "node scripts/diagnose-latest-matching.js",
+    "hardening:accept-race": "node scripts/rehearse-offer-accept-race.js"
   },
   "dependencies": {
     "axios": "latest",
