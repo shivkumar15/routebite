@@ -1,3 +1,4 @@
+import { DELIVERY_OPERATION_LIMITS } from '../constants/delivery.constants.js';
 import { DELIVERY_TYPE, MAX_ASAP_DELIVERY_MINUTES, ORDER_STATUS } from '../constants/order.constants.js';
 import { Order } from '../models/order.model.js';
 import { calculateCheckoutPricing } from './pricing.service.js';
@@ -65,6 +66,19 @@ function safePriceAdjustment(order) {
   };
 }
 
+function safeDeliveryOtp(order) {
+  const otp = order.deliveryOtp ?? {};
+  return {
+    requestedAt: order.deliveryOtpRequestedAt ?? null,
+    generated: Boolean(otp.generatedAt && otp.expiresAt && !otp.usedAt),
+    generatedAt: otp.generatedAt ?? null,
+    expiresAt: otp.expiresAt ?? null,
+    attempts: otp.attempts ?? 0,
+    maxAttempts: DELIVERY_OPERATION_LIMITS.DELIVERY_OTP_MAX_ATTEMPTS,
+    usedAt: otp.usedAt ?? null,
+  };
+}
+
 function toSafeOrder(order) {
   return {
     id: order._id.toString(),
@@ -88,8 +102,12 @@ function toSafeOrder(order) {
     estimatedFoodCostPaise: order.pricing.estimatedFoodCostPaise,
     pricing: safePricing(order),
     priceAdjustment: safePriceAdjustment(order),
+    deliveryOtp: safeDeliveryOtp(order),
     pickupStartedAt: order.pickupStartedAt ?? null,
     pickedUpAt: order.pickedUpAt ?? null,
+    deliveryStartedAt: order.deliveryStartedAt ?? null,
+    deliveredAt: order.deliveredAt ?? null,
+    completedAt: order.completedAt ?? null,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
   };
