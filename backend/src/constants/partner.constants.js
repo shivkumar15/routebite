@@ -17,7 +17,10 @@ export const TRIP_STATUS = Object.freeze({
 });
 
 export const PARTNER_OPERATION_LIMITS = Object.freeze({
-  MAX_LOCATION_AGE_SECONDS: 60,
+  // Browser tabs can throttle timers/geolocation in the background. Keep the
+  // foreground heartbeat frequent, but allow a practical prototype grace window
+  // before matching treats an AVAILABLE_NOW partner as stale.
+  MAX_LOCATION_AGE_SECONDS: 300,
   DEFAULT_DEPARTURE_FLEX_MINUTES: 15,
   MAX_DEPARTURE_FLEX_MINUTES: 180,
 });
