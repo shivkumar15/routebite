@@ -17,6 +17,7 @@ function formatDate(value) {
 export default function PartnerEarningsPage() {
   const [summary, setSummary] = useState(null);
   const [earnings, setEarnings] = useState([]);
+  const [rating, setRating] = useState(null);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -24,12 +25,20 @@ export default function PartnerEarningsPage() {
   useEffect(() => {
     let active = true;
 
-    api.get('/partner/earnings')
-      .then(({ data }) => {
+    Promise.all([
+      api.get('/partner/earnings'),
+      api.get('/partner/operational-state'),
+    ])
+      .then(([earningsResponse, partnerResponse]) => {
         if (!active) return;
-        setSummary(data.data.summary);
-        setEarnings(data.data.earnings);
-        setNote(data.data.note);
+        setSummary(earningsResponse.data.data.summary);
+        setEarnings(earningsResponse.data.data.earnings);
+        setNote(earningsResponse.data.data.note);
+        const partner = partnerResponse.data.data.partner;
+        setRating({
+          average: Number(partner.ratingAverage ?? 0),
+          count: Number(partner.ratingCount ?? 0),
+        });
       })
       .catch((requestError) => {
         if (active) {
@@ -66,6 +75,17 @@ export default function PartnerEarningsPage() {
         </header>
 
         {error ? <p className="form-error">{error}</p> : null}
+
+        {!error && rating ? (
+          <div className="rating-partner-summary partner-rating-summary">
+            <span>Customer rating</span>
+            <strong>
+              {rating.count > 0
+                ? `★ ${rating.average.toFixed(1)} / 5 · ${rating.count} rating${rating.count === 1 ? '' : 's'}`
+                : 'No customer ratings yet'}
+            </strong>
+          </div>
+        ) : null}
 
         {!error && summary ? (
           <>
