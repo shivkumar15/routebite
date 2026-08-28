@@ -17,20 +17,25 @@ function formatTime(value) {
 
 export default function LiveTrackingCard({ tracking, dropLabel }) {
   const [now, setNow] = useState(Date.now());
+  const trackingActive = Boolean(tracking?.active);
+  const location = tracking?.location ?? null;
 
   useEffect(() => {
-    if (!tracking?.active) return undefined;
     const timer = window.setInterval(() => setNow(Date.now()), 5000);
     return () => window.clearInterval(timer);
-  }, [tracking?.active]);
+  }, []);
 
-  if (!tracking?.active) return null;
-
-  const location = tracking.location;
   const clientStale = Boolean(
     location?.updatedAt && now - new Date(location.updatedAt).getTime() > 45000,
   );
   const stale = Boolean(location?.stale || clientStale);
+
+  let badgeLabel = 'Waiting for GPS';
+  if (trackingActive && location) {
+    badgeLabel = stale ? 'Location delayed' : 'Live';
+  } else if (trackingActive) {
+    badgeLabel = 'Connecting';
+  }
 
   return (
     <section className="live-tracking-card" aria-live="polite">
@@ -39,9 +44,11 @@ export default function LiveTrackingCard({ tracking, dropLabel }) {
           <p className="eyebrow">Live delivery</p>
           <h3>Partner is on the way</h3>
         </div>
-        <span className={`live-tracking-badge ${stale ? 'is-stale' : ''}`}>
+        <span
+          className={`live-tracking-badge ${stale || !trackingActive ? 'is-stale' : ''}`}
+        >
           <span aria-hidden="true" />
-          {stale ? 'Location delayed' : 'Live'}
+          {badgeLabel}
         </span>
       </div>
 
@@ -73,7 +80,7 @@ export default function LiveTrackingCard({ tracking, dropLabel }) {
         </div>
       ) : (
         <p className="live-tracking-waiting">
-          Delivery has started. Waiting for the partner browser's first foreground GPS update.
+          Delivery has started. Waiting for the partner browser's first foreground GPS update. Keep the partner page open and allow location permission.
         </p>
       )}
 
