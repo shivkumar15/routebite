@@ -23,12 +23,87 @@ function waitingAttemptToResult(attempt) {
   };
 }
 
+async function removeExcludedRecoveryCandidates(order, result, now) {
+  if (result?.status !== MATCHING_ATTEMPT_STATUS.CANDIDATES_READY) return result;
+
+  const excluded = new Set(
+    (order.recovery?.excludedPartnerIds ?? []).map((id) => id.toString()),
+  );
+  if (excluded.size === 0) return result;
+
+  const eligibleCandidates = result.candidates.filter(
+    (candidate) => !excluded.has(candidate.partnerId.toString()),
+  );
+
+  if (eligibleCandidates.length === result.candidates.length) return result;
+
+  if (eligibleCandidates.length === 0) {
+    const reason = 'All eligible candidates were excluded after a prior partner cancellation.';
+    await MatchingAttempt.updateOne(
+      { _id: result.id, status: MATCHING_ATTEMPT_STATUS.CANDIDATES_READY },
+      {
+        $set: {
+          status: MATCHING_ATTEMPT_STATUS.NO_CANDIDATES,
+          eligibleCandidateCount: 0,
+          candidates: [],
+          offerReadyPartnerIds: [],
+          failureReason: reason,
+          completedAt: now,
+        },
+      },
+    );
+    await Order.updateOne(
+      { _id: order._id, status: ORDER_STATUS.MATCHING, assignedPartnerId: null },
+      { $set: { status: ORDER_STATUS.MATCHING_FAILED } },
+    );
+    return {
+      ...result,
+      status: MATCHING_ATTEMPT_STATUS.NO_CANDIDATES,
+      eligibleCandidateCount: 0,
+      candidates: [],
+      offerReadyPartnerIds: [],
+      failureReason: reason,
+    };
+  }
+
+  const reranked = eligibleCandidates.map((candidate, index) => ({
+    ...candidate,
+    rankPosition: index + 1,
+  }));
+  const offerReadyPartnerIds = reranked
+    .slice(0, MATCHING_LIMITS.OFFER_BATCH_SIZE)
+    .map((candidate) => candidate.partnerId);
+
+  await MatchingAttempt.updateOne(
+    { _id: result.id, status: MATCHING_ATTEMPT_STATUS.CANDIDATES_READY },
+    {
+      $set: {
+        eligibleCandidateCount: reranked.length,
+        candidates: reranked,
+        offerReadyPartnerIds,
+      },
+    },
+  );
+
+  return {
+    ...result,
+    eligibleCandidateCount: reranked.length,
+    candidates: reranked,
+    offerReadyPartnerIds,
+  };
+}
+
 async function runAndDispatch(orderId, now) {
   const result = await runMatchingForOrder(orderId, now);
-  if (result?.status === MATCHING_ATTEMPT_STATUS.CANDIDATES_READY) {
-    await dispatchNextOfferBatch(result.id, now);
+  const order = await Order.findById(orderId);
+  const filtered = order
+    ? await removeExcludedRecoveryCandidates(order, result, now)
+    : result;
+
+  if (filtered?.status === MATCHING_ATTEMPT_STATUS.CANDIDATES_READY) {
+    await dispatchNextOfferBatch(filtered.id, now);
   }
-  return result;
+  return filtered;
 }
 
 export function getScheduledMatchingResumeAt(order) {

@@ -24,29 +24,20 @@ export default function DemoLedgerPage() {
 
   useEffect(() => {
     let active = true;
-
     api.get(`/orders/${orderId}/demo-ledger`)
       .then(({ data }) => {
         if (active) setLedger(data.data.ledger);
       })
       .catch((requestError) => {
-        if (active) {
-          setError(
-            requestError.response?.data?.error?.message ??
-              'Could not load the demo financial breakdown.',
-          );
-        }
+        if (active) setError(requestError.response?.data?.error?.message ?? 'Could not load the demo financial breakdown.');
       })
       .finally(() => {
         if (active) setLoading(false);
       });
-
     return () => { active = false; };
   }, [orderId]);
 
-  if (loading) {
-    return <main className="ledger-shell"><p>Loading demo ledger…</p></main>;
-  }
+  if (loading) return <main className="ledger-shell"><p>Loading demo ledger…</p></main>;
 
   if (!ledger) {
     return (
@@ -60,7 +51,8 @@ export default function DemoLedgerPage() {
   }
 
   const completed = ledger.outcome === 'COMPLETED';
-  const matchingFailed = ledger.outcome === 'MATCHING_FAILED';
+  const refundTerminal = ['MATCHING_FAILED', 'CANCELLED'].includes(ledger.outcome);
+  const reviewRequired = ledger.outcome === 'ADMIN_REVIEW_REQUIRED';
   const hasAdjustment = Number(ledger.customer.adjustmentPaise ?? 0) !== 0;
 
   return (
@@ -88,15 +80,17 @@ export default function DemoLedgerPage() {
           <strong>{humanize(ledger.outcome)}</strong>
         </div>
 
+        {ledger.recovery?.event && ledger.recovery.event !== 'NONE' ? (
+          <div className="demo-accounting-warning">
+            <strong>Recovery event · {humanize(ledger.recovery.event)}</strong>
+            <p>{ledger.recovery.reason || 'RouteBite recorded a recovery action for this order.'}</p>
+          </div>
+        ) : null}
+
         <section className="ledger-section">
           <div className="ledger-section-heading">
-            <div>
-              <p className="eyebrow">Customer side</p>
-              <h2>Test payment & adjustment</h2>
-            </div>
-            <span className="ledger-provider-chip">
-              {ledger.providerPayment.provider ?? 'No provider'} · {ledger.providerPayment.mode ?? '—'}
-            </span>
+            <div><p className="eyebrow">Customer side</p><h2>Test payment & adjustment</h2></div>
+            <span className="ledger-provider-chip">{ledger.providerPayment.provider ?? 'No provider'} · {ledger.providerPayment.mode ?? '—'}</span>
           </div>
 
           <div className="ledger-grid">
@@ -109,30 +103,31 @@ export default function DemoLedgerPage() {
           </div>
 
           {hasAdjustment ? (
-            <p className="ledger-footnote">
-              The net order adjustment is the accounting change from the original test-payment amount to the current demo total. Refund or extra-charge figures below describe the resulting outcome; they are not additional transactions on top of this adjustment.
-            </p>
+            <p className="ledger-footnote">The net order adjustment changes the original test-payment amount to the current demo total. Refund or extra-charge values describe that outcome; they are not additional transactions.</p>
           ) : null}
         </section>
 
-        {matchingFailed ? (
+        {refundTerminal ? (
           <section className="ledger-refund-panel">
-            <p className="eyebrow">Matching failure</p>
+            <p className="eyebrow">{ledger.outcome === 'CANCELLED' ? 'Cancellation' : 'Matching failure'}</p>
             <h2>Full demo refund represented</h2>
             <strong>{formatMoney(ledger.refund.amountPaise)}</strong>
             <p>{ledger.refund.reason}</p>
-            <small>{humanize(ledger.refund.status)} · this refund is the outcome of the net order adjustment above; no live provider refund was issued by this prototype flow.</small>
+            <small>{humanize(ledger.refund.status)} · this is the outcome of the net order adjustment above; no live provider refund was issued by this prototype flow.</small>
+          </section>
+        ) : null}
+
+        {reviewRequired ? (
+          <section className="ledger-refund-panel">
+            <p className="eyebrow">Operations review required</p>
+            <h2>No automatic refund or settlement decision</h2>
+            <p>{ledger.refund.reason}</p>
+            <small>RouteBite intentionally leaves the financial result unresolved when food or fulfilment exposure already exists.</small>
           </section>
         ) : null}
 
         <section className="ledger-section">
-          <div className="ledger-section-heading">
-            <div>
-              <p className="eyebrow">Fulfilment economics</p>
-              <h2>Where the demo amount goes</h2>
-            </div>
-          </div>
-
+          <div className="ledger-section-heading"><div><p className="eyebrow">Fulfilment economics</p><h2>Where the demo amount goes</h2></div></div>
           <div className="ledger-grid ledger-economics-grid">
             <div><span>Food reimbursement</span><strong>{formatMoney(ledger.food.reimbursementPaise)}</strong></div>
             <div><span>Partner base earning</span><strong>{formatMoney(ledger.partner.baseEarningPaise)}</strong></div>
@@ -141,12 +136,7 @@ export default function DemoLedgerPage() {
             <div><span>Platform fee</span><strong>{formatMoney(ledger.platform.feePaise)}</strong></div>
             <div><span>Platform subsidy</span><strong>{formatMoney(ledger.platform.subsidyPaise)}</strong></div>
           </div>
-
-          {completed ? (
-            <p className="ledger-footnote">
-              Partner incentive and platform subsidy are intentionally separate. In the current prototype flow the incentive can be ₹0.00; when incentives are introduced, the subsidy line shows the platform-funded amount instead of hiding it inside partner earnings.
-            </p>
-          ) : null}
+          {completed ? <p className="ledger-footnote">Partner incentive and platform subsidy remain separate so platform-funded incentives are never hidden inside base earnings.</p> : null}
         </section>
 
         <div className="ledger-settlement-row">

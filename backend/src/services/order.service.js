@@ -79,6 +79,17 @@ function safeDeliveryOtp(order) {
   };
 }
 
+function safeRecovery(order) {
+  const recovery = order.recovery ?? {};
+  return {
+    event: recovery.lastEvent ?? 'NONE',
+    actor: recovery.lastActor ?? null,
+    reason: recovery.reason ?? null,
+    occurredAt: recovery.occurredAt ?? null,
+    rematchCount: recovery.rematchCount ?? 0,
+  };
+}
+
 function toSafeOrder(order) {
   return {
     id: order._id.toString(),
@@ -103,6 +114,7 @@ function toSafeOrder(order) {
     pricing: safePricing(order),
     priceAdjustment: safePriceAdjustment(order),
     deliveryOtp: safeDeliveryOtp(order),
+    recovery: safeRecovery(order),
     pickupStartedAt: order.pickupStartedAt ?? null,
     pickedUpAt: order.pickedUpAt ?? null,
     deliveryStartedAt: order.deliveryStartedAt ?? null,

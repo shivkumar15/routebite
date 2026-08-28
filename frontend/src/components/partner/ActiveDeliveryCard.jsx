@@ -59,12 +59,8 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
           return;
         }
         applyOrder(data.data.order);
-        if (payload.status === 'PARTNER_TO_PICKUP') {
-          setMessage('Customer approved the higher food price.');
-        }
-        if (payload.expiresAt) {
-          setMessage('Customer generated a delivery OTP. Ask them for the 6-digit code after handoff.');
-        }
+        if (payload.status === 'PARTNER_TO_PICKUP') setMessage('Customer approved the higher food price.');
+        if (payload.expiresAt) setMessage('Customer generated a delivery OTP. Ask them for the 6-digit code after handoff.');
       } catch {
         // REST remains authoritative; a later dashboard refresh can recover.
       }
@@ -75,6 +71,7 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
     socket.on('price:timed-out', refreshActiveOrder);
     socket.on('delivery:otp-generated', refreshActiveOrder);
     socket.on('order:completed', refreshActiveOrder);
+    socket.on('order:cancelled', refreshActiveOrder);
 
     return () => {
       socket.off('price:approved', refreshActiveOrder);
@@ -82,14 +79,13 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
       socket.off('price:timed-out', refreshActiveOrder);
       socket.off('delivery:otp-generated', refreshActiveOrder);
       socket.off('order:completed', refreshActiveOrder);
+      socket.off('order:cancelled', refreshActiveOrder);
     };
   }, [order, onOrderChange, onCompleted]);
 
   useEffect(() => {
     if (order?.status !== 'DELIVERY_OTP_REQUIRED' || !navigator.geolocation) return undefined;
-
     let active = true;
-
     function pushLocation() {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
@@ -101,14 +97,13 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
               accuracyMeters: position.coords.accuracy,
             });
           } catch {
-            // The dashboard/REST state remains authoritative; keep OTP confirmation usable.
+            // Keep OTP confirmation usable; REST state stays authoritative.
           }
         },
         () => {},
         { enableHighAccuracy: true, timeout: 12000, maximumAge: 3000 },
       );
     }
-
     pushLocation();
     const timer = window.setInterval(pushLocation, 12000);
     return () => {
@@ -128,10 +123,7 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
       applyOrder(data.data.order);
       setMessage(successMessage);
     } catch (requestError) {
-      setError(
-        requestError.response?.data?.error?.message ??
-          'Could not update this delivery.',
-      );
+      setError(requestError.response?.data?.error?.message ?? 'Could not update this delivery.');
     } finally {
       setBusy('');
     }
@@ -144,11 +136,9 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
       setError('Enter the actual food amount in rupees with up to two decimal places.');
       return;
     }
-
     setBusy('price');
     setError('');
     setMessage('');
-
     try {
       let receiptAssetId = null;
       if (receiptFile) {
@@ -158,7 +148,6 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
         const uploadResponse = await api.post('/uploads', formData);
         receiptAssetId = uploadResponse.data.data.asset.id;
       }
-
       const { data } = await api.post('/partner/active-order/actual-price', {
         actualFoodCostPaise,
         receiptAssetId,
@@ -170,10 +159,7 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
           : 'Actual food price recorded. You can confirm pickup after buying the food.',
       );
     } catch (requestError) {
-      setError(
-        requestError.response?.data?.error?.message ??
-          'Could not record the actual food price.',
-      );
+      setError(requestError.response?.data?.error?.message ?? 'Could not record the actual food price.');
     } finally {
       setBusy('');
     }
@@ -185,14 +171,11 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
       setError('Enter the 6-digit OTP shown to the customer.');
       return;
     }
-
     setBusy('delivery-otp');
     setError('');
     setMessage('');
     try {
-      const { data } = await api.post('/partner/active-order/verify-delivery-otp', {
-        otp: deliveryOtp,
-      });
+      const { data } = await api.post('/partner/active-order/verify-delivery-otp', { otp: deliveryOtp });
       setDeliveryOtp('');
       finishOrder(data.data.completedOrder);
     } catch (requestError) {
@@ -200,9 +183,36 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
       const suffix = Number.isInteger(details?.attemptsRemaining)
         ? ` ${details.attemptsRemaining} attempt${details.attemptsRemaining === 1 ? '' : 's'} remaining for this code.`
         : '';
-      setError(
-        `${requestError.response?.data?.error?.message ?? 'Could not verify the delivery OTP.'}${suffix}`,
+      setError(`${requestError.response?.data?.error?.message ?? 'Could not verify the delivery OTP.'}${suffix}`);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function cannotComplete() {
+    const afterPickup = ['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERY_OTP_REQUIRED'].includes(order.status);
+    const confirmed = window.confirm(
+      afterPickup
+        ? 'Food has already been picked up. Reporting failure will release you and send this order to operations review. Continue?'
+        : 'Report that you cannot complete this delivery? RouteBite will release you and try to rematch another partner.',
+    );
+    if (!confirmed) return;
+
+    setBusy('recovery');
+    setError('');
+    try {
+      const { data } = await api.post('/partner/active-order/cannot-complete', {
+        reason: 'Partner reported inability to complete from the active delivery screen.',
+      });
+      const releasedOrder = data.data.order;
+      finishOrder(releasedOrder);
+      window.alert(
+        data.data.rematching
+          ? `You were released. The customer order is now ${releasedOrder.status}. RouteBite has started recovery/rematching.`
+          : `You were released. The order is now ${releasedOrder.status} and requires operations review.`,
       );
+    } catch (requestError) {
+      setError(requestError.response?.data?.error?.message ?? 'Could not start delivery recovery.');
     } finally {
       setBusy('');
     }
@@ -215,41 +225,18 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
   return (
     <section className="partner-section-card active-delivery-card">
       <div className="partner-section-heading">
-        <div>
-          <p className="eyebrow">Active delivery</p>
-          <h2>You accepted this request</h2>
-        </div>
+        <div><p className="eyebrow">Active delivery</p><h2>You accepted this request</h2></div>
         <span className="order-status-chip">{order.status}</span>
       </div>
 
       <div className="active-delivery-summary">
-        <div>
-          <span className="active-delivery-label">Food place</span>
-          <strong>{order.vendorDisplayName}</strong>
-          <p>{order.requestedItems}</p>
-        </div>
-
+        <div><span className="active-delivery-label">Food place</span><strong>{order.vendorDisplayName}</strong><p>{order.requestedItems}</p></div>
         <div className="active-delivery-route">
-          <div>
-            <span className="active-delivery-label">Pickup</span>
-            <strong>{order.pickup.label}</strong>
-            <small>{order.pickup.latitude.toFixed(5)}, {order.pickup.longitude.toFixed(5)}</small>
-          </div>
+          <div><span className="active-delivery-label">Pickup</span><strong>{order.pickup.label}</strong><small>{order.pickup.latitude.toFixed(5)}, {order.pickup.longitude.toFixed(5)}</small></div>
           <span aria-hidden="true">→</span>
-          <div>
-            <span className="active-delivery-label">Drop</span>
-            <strong>{order.drop.label}</strong>
-            <small>{order.drop.latitude.toFixed(5)}, {order.drop.longitude.toFixed(5)}</small>
-          </div>
+          <div><span className="active-delivery-label">Drop</span><strong>{order.drop.label}</strong><small>{order.drop.latitude.toFixed(5)}, {order.drop.longitude.toFixed(5)}</small></div>
         </div>
-
-        {order.pickupInstructions ? (
-          <div>
-            <span className="active-delivery-label">Pickup instructions</span>
-            <p>{order.pickupInstructions}</p>
-          </div>
-        ) : null}
-
+        {order.pickupInstructions ? <div><span className="active-delivery-label">Pickup instructions</span><p>{order.pickupInstructions}</p></div> : null}
         <div className="active-delivery-footer">
           <span>Expected earning <strong>{formatMoney(order.expectedEarningPaise)}</strong></span>
           <span>Food estimate <strong>{formatMoney(order.estimatedFoodCostPaise)}</strong></span>
@@ -261,13 +248,7 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
       {error ? <p className="form-error active-delivery-flash">{error}</p> : null}
 
       {order.status === 'ASSIGNED' ? (
-        <div className="active-delivery-next-step">
-          <strong>Ready to head to the food place?</strong>
-          <p>Start pickup only when you are beginning this accepted delivery. This is separate from your planned On My Way routes.</p>
-          <button className="primary-button" type="button" disabled={Boolean(busy)} onClick={() => runAction('/partner/active-order/start-pickup', 'Pickup journey started.')}>
-            {busy ? 'Starting…' : 'Start pickup'}
-          </button>
-        </div>
+        <div className="active-delivery-next-step"><strong>Ready to head to the food place?</strong><p>Start pickup only when you are beginning this accepted delivery. This is separate from your planned On My Way routes.</p><button className="primary-button" type="button" disabled={Boolean(busy)} onClick={() => runAction('/partner/active-order/start-pickup', 'Pickup journey started.')}>{busy ? 'Starting…' : 'Start pickup'}</button></div>
       ) : null}
 
       {order.status === 'PARTNER_TO_PICKUP' && !priceReported ? (
@@ -280,59 +261,37 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange,
       ) : null}
 
       {order.status === 'PRICE_CONFIRMATION_REQUIRED' ? (
-        <div className="active-delivery-waiting">
-          <strong>Waiting for customer approval</strong>
-          <p>Actual food price is {formatMoney(adjustment.actualFoodCostPaise)} — {formatMoney(adjustment.differencePaise)} above the estimate. Do not buy the food until the customer approves.</p>
-          <small>Approval expires {new Date(adjustment.approvalExpiresAt).toLocaleString()}.</small>
-        </div>
+        <div className="active-delivery-waiting"><strong>Waiting for customer approval</strong><p>Actual food price is {formatMoney(adjustment.actualFoodCostPaise)} — {formatMoney(adjustment.differencePaise)} above the estimate. Do not buy the food until the customer approves.</p><small>Approval expires {new Date(adjustment.approvalExpiresAt).toLocaleString()}.</small></div>
       ) : null}
 
       {order.status === 'PARTNER_TO_PICKUP' && priceReported ? (
-        <div className="active-delivery-next-step">
-          <strong>{adjustment.status === 'AUTO_DECREASED' ? 'Lower price recorded automatically' : adjustment.status === 'APPROVED' ? 'Customer approved the higher price' : 'Price confirmed'}</strong>
-          <p>Actual food price: {formatMoney(adjustment.actualFoodCostPaise)}. Buy the food, then confirm only after it is physically with you.</p>
-          <button className="primary-button" type="button" disabled={Boolean(busy)} onClick={() => runAction('/partner/active-order/confirm-pickup', 'Food pickup confirmed.')}>
-            {busy ? 'Confirming…' : 'Confirm food picked up'}
-          </button>
-        </div>
+        <div className="active-delivery-next-step"><strong>{adjustment.status === 'AUTO_DECREASED' ? 'Lower price recorded automatically' : adjustment.status === 'APPROVED' ? 'Customer approved the higher price' : 'Price confirmed'}</strong><p>Actual food price: {formatMoney(adjustment.actualFoodCostPaise)}. Buy the food, then confirm only after it is physically with you.</p><button className="primary-button" type="button" disabled={Boolean(busy)} onClick={() => runAction('/partner/active-order/confirm-pickup', 'Food pickup confirmed.')}>{busy ? 'Confirming…' : 'Confirm food picked up'}</button></div>
       ) : null}
 
       {order.status === 'PICKED_UP' ? (
-        <div className="active-delivery-next-step">
-          <strong>Food picked up</strong>
-          <p>Start delivery when you are leaving the food place. Foreground GPS sharing begins only after this action.</p>
-          <button className="primary-button" type="button" disabled={Boolean(busy)} onClick={() => runAction('/partner/active-order/start-delivery', 'Live delivery started. Keep this page open for tracking.')}>
-            {busy ? 'Starting delivery…' : 'Start delivery'}
-          </button>
-        </div>
+        <div className="active-delivery-next-step"><strong>Food picked up</strong><p>Start delivery when you are leaving the food place. Foreground GPS sharing begins only after this action.</p><button className="primary-button" type="button" disabled={Boolean(busy)} onClick={() => runAction('/partner/active-order/start-delivery', 'Live delivery started. Keep this page open for tracking.')}>{busy ? 'Starting delivery…' : 'Start delivery'}</button></div>
       ) : null}
 
       {order.status === 'OUT_FOR_DELIVERY' ? (
-        <div className="active-delivery-next-step live-tracking-partner-panel">
-          <strong>Live delivery tracking is active</strong>
-          <p>Keep this page open while travelling. When you are physically at the customer drop, request delivery confirmation.</p>
-          <button className="primary-button" type="button" disabled={Boolean(busy)} onClick={() => runAction('/partner/active-order/request-delivery-otp', 'Delivery confirmation requested. Ask the customer to generate their OTP.')}>
-            {busy ? 'Requesting…' : 'I reached the customer · Request OTP'}
-          </button>
-        </div>
+        <div className="active-delivery-next-step live-tracking-partner-panel"><strong>Live delivery tracking is active</strong><p>Keep this page open while travelling. When you are physically at the customer drop, request delivery confirmation.</p><button className="primary-button" type="button" disabled={Boolean(busy)} onClick={() => runAction('/partner/active-order/request-delivery-otp', 'Delivery confirmation requested. Ask the customer to generate their OTP.')}>{busy ? 'Requesting…' : 'I reached the customer · Request OTP'}</button></div>
       ) : null}
 
       {order.status === 'DELIVERY_OTP_REQUIRED' ? (
         <form className="active-delivery-price-form" onSubmit={verifyOtp}>
-          <div>
-            <strong>Confirm handoff with the customer OTP</strong>
-            <p>{otpState.generated ? `A customer OTP is active until ${new Date(otpState.expiresAt).toLocaleTimeString()}. Ask for it only after the customer has the food.` : 'Waiting for the customer to generate a 6-digit delivery OTP on their order page.'}</p>
-          </div>
-          <label>
-            Customer delivery OTP
-            <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={deliveryOtp} onChange={(event) => setDeliveryOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit OTP" disabled={!otpState.generated || Boolean(busy)} required />
-          </label>
+          <div><strong>Confirm handoff with the customer OTP</strong><p>{otpState.generated ? `A customer OTP is active until ${new Date(otpState.expiresAt).toLocaleTimeString()}. Ask for it only after the customer has the food.` : 'Waiting for the customer to generate a 6-digit delivery OTP on their order page.'}</p></div>
+          <label>Customer delivery OTP<input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={deliveryOtp} onChange={(event) => setDeliveryOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit OTP" disabled={!otpState.generated || Boolean(busy)} required /></label>
           <small>{otpState.attempts ?? 0} of {otpState.maxAttempts ?? 5} incorrect attempts used for the current code.</small>
-          <button className="primary-button" type="submit" disabled={!otpState.generated || Boolean(busy) || deliveryOtp.length !== 6}>
-            {busy === 'delivery-otp' ? 'Verifying…' : 'Verify OTP & complete delivery'}
-          </button>
+          <button className="primary-button" type="submit" disabled={!otpState.generated || Boolean(busy) || deliveryOtp.length !== 6}>{busy === 'delivery-otp' ? 'Verifying…' : 'Verify OTP & complete delivery'}</button>
         </form>
       ) : null}
+
+      <div className="active-delivery-waiting">
+        <strong>Can’t complete this delivery?</strong>
+        <p>Before food pickup, RouteBite releases you and attempts another match. After pickup, the order is sent to operations review because food and money exposure already exists.</p>
+        <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={cannotComplete}>
+          {busy === 'recovery' ? 'Starting recovery…' : 'I can’t complete this delivery'}
+        </button>
+      </div>
     </section>
   );
 }

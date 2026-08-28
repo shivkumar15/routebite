@@ -7,7 +7,9 @@ process.env.JWT_SECRET ??= 'test-jwt-secret-that-is-long-enough-for-routebite-te
 const { MATCHING_PARTNER_MODE, MATCHING_REJECTION_REASON } = await import(
   '../../src/constants/matching.constants.js'
 );
-const { TRIP_STATUS } = await import('../../src/constants/partner.constants.js');
+const { PARTNER_OPERATION_LIMITS, TRIP_STATUS } = await import(
+  '../../src/constants/partner.constants.js'
+);
 const { getScheduledMatchingResumeAt } = await import(
   '../../src/services/matching-orchestration.service.js'
 );
@@ -22,6 +24,10 @@ describe('Phase 6 matching rules', () => {
     origin: { type: 'Point', coordinates: [81.80, 25.40] },
     destination: { type: 'Point', coordinates: [81.90, 25.40] },
   };
+
+  test('browser partner matching keeps a five-minute location grace window', () => {
+    expect(PARTNER_OPERATION_LIMITS.MAX_LOCATION_AGE_SECONDS).toBe(300);
+  });
 
   test('scheduled on-my-way geometry requires pickup before drop', () => {
     const good = evaluateTripGeometry({

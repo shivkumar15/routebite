@@ -9,6 +9,7 @@ import {
   paymentStatus,
   verifyPayment,
 } from '../controllers/payment.controller.js';
+import { cancelCustomer } from '../controllers/recovery.controller.js';
 import { customerTracking } from '../controllers/tracking.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { validateRequest } from '../middleware/validate.middleware.js';
@@ -18,6 +19,7 @@ import {
   paymentStatusValidators,
   verifyPaymentValidators,
 } from '../validators/payment.validators.js';
+import { recoveryReasonValidators } from '../validators/recovery.validators.js';
 
 const router = Router();
 
@@ -32,6 +34,12 @@ router.get('/:orderId/matching', orderIdValidators, validateRequest, matchingDet
 router.get('/:orderId/tracking', orderIdValidators, validateRequest, customerTracking);
 router.get('/:orderId/demo-ledger', orderIdValidators, validateRequest, customerDemoLedger);
 router.post('/:orderId/delivery-otp', orderIdValidators, validateRequest, generateDeliveryOtp);
+router.post(
+  '/:orderId/cancel',
+  [...orderIdValidators, ...recoveryReasonValidators],
+  validateRequest,
+  cancelCustomer,
+);
 router.post(
   '/:orderId/price-adjustment/approve',
   orderIdValidators,

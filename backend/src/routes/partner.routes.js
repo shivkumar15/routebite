@@ -22,6 +22,7 @@ import {
   updateAvailability,
   updateLocation,
 } from '../controllers/partner.controller.js';
+import { partnerCannotComplete } from '../controllers/recovery.controller.js';
 import {
   startPartnerDelivery,
   updatePartnerDeliveryLocation,
@@ -46,6 +47,7 @@ import {
   partnerAvailabilityValidators,
   partnerLocationValidators,
 } from '../validators/partner.validators.js';
+import { recoveryReasonValidators } from '../validators/recovery.validators.js';
 import { createTripValidators, tripIdValidators } from '../validators/trip.validators.js';
 
 const router = Router();
@@ -57,6 +59,14 @@ router.get('/operational-state', requireAuth, requireApprovedPartner, operationa
 router.get('/active-order', requireAuth, requireApprovedPartner, activeOrder);
 router.get('/earnings', requireAuth, requireApprovedPartner, partnerEarnings);
 router.post('/active-order/start-pickup', requireAuth, requireApprovedPartner, startPartnerPickup);
+router.post(
+  '/active-order/cannot-complete',
+  requireAuth,
+  requireApprovedPartner,
+  recoveryReasonValidators,
+  validateRequest,
+  partnerCannotComplete,
+);
 router.post(
   '/active-order/actual-price',
   requireAuth,

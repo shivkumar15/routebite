@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { PRICE_ADJUSTMENT_STATUS } from '../constants/delivery.constants.js';
 import { DELIVERY_TYPE, ORDER_STATUS } from '../constants/order.constants.js';
+import { RECOVERY_ACTOR, RECOVERY_EVENT } from '../constants/recovery.constants.js';
 
 const pointSchema = new mongoose.Schema(
   {
@@ -104,6 +105,35 @@ const deliveryOtpSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const recoverySchema = new mongoose.Schema(
+  {
+    lastEvent: {
+      type: String,
+      enum: Object.values(RECOVERY_EVENT),
+      default: RECOVERY_EVENT.NONE,
+      required: true,
+    },
+    lastActor: {
+      type: String,
+      enum: Object.values(RECOVERY_ACTOR),
+      default: null,
+    },
+    reason: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: null,
+    },
+    occurredAt: { type: Date, default: null },
+    rematchCount: { type: Number, default: 0, min: 0 },
+    excludedPartnerIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Partner' }],
+      default: [],
+    },
+  },
+  { _id: false },
+);
+
 const orderSchema = new mongoose.Schema(
   {
     customerId: {
@@ -139,10 +169,7 @@ const orderSchema = new mongoose.Schema(
       maxlength: 500,
       default: '',
     },
-    pickup: {
-      type: pointSchema,
-      required: true,
-    },
+    pickup: { type: pointSchema, required: true },
     pickupText: {
       type: String,
       required: true,
@@ -150,10 +177,7 @@ const orderSchema = new mongoose.Schema(
       minlength: 2,
       maxlength: 180,
     },
-    drop: {
-      type: pointSchema,
-      required: true,
-    },
+    drop: { type: pointSchema, required: true },
     dropText: {
       type: String,
       required: true,
@@ -166,14 +190,8 @@ const orderSchema = new mongoose.Schema(
       enum: Object.values(DELIVERY_TYPE),
       required: true,
     },
-    deliveryWindowStart: {
-      type: Date,
-      required: true,
-    },
-    deliveryWindowEnd: {
-      type: Date,
-      required: true,
-    },
+    deliveryWindowStart: { type: Date, required: true },
+    deliveryWindowEnd: { type: Date, required: true },
     assignedPartnerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Partner',
@@ -184,10 +202,7 @@ const orderSchema = new mongoose.Schema(
       ref: 'Trip',
       default: null,
     },
-    pricing: {
-      type: pricingSchema,
-      required: true,
-    },
+    pricing: { type: pricingSchema, required: true },
     priceAdjustment: {
       type: priceAdjustmentSchema,
       default: () => ({}),
@@ -195,6 +210,11 @@ const orderSchema = new mongoose.Schema(
     },
     deliveryOtp: {
       type: deliveryOtpSchema,
+      default: () => ({}),
+      required: true,
+    },
+    recovery: {
+      type: recoverySchema,
       default: () => ({}),
       required: true,
     },
@@ -217,5 +237,6 @@ orderSchema.index({ drop: '2dsphere' });
 orderSchema.index({ status: 1, deliveryWindowStart: 1 });
 orderSchema.index({ status: 1, 'priceAdjustment.approvalExpiresAt': 1 });
 orderSchema.index({ status: 1, 'deliveryOtp.expiresAt': 1 });
+orderSchema.index({ 'recovery.excludedPartnerIds': 1 });
 
 export const Order = mongoose.model('Order', orderSchema);

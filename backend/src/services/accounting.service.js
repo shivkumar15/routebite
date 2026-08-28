@@ -18,6 +18,10 @@ function integerPaise(value) {
 function resolveOutcome(orderStatus) {
   if (orderStatus === ORDER_STATUS.COMPLETED) return DEMO_LEDGER_OUTCOME.COMPLETED;
   if (orderStatus === ORDER_STATUS.MATCHING_FAILED) return DEMO_LEDGER_OUTCOME.MATCHING_FAILED;
+  if (orderStatus === ORDER_STATUS.CANCELLED) return DEMO_LEDGER_OUTCOME.CANCELLED;
+  if (orderStatus === ORDER_STATUS.ADMIN_REVIEW_REQUIRED) {
+    return DEMO_LEDGER_OUTCOME.ADMIN_REVIEW_REQUIRED;
+  }
   return DEMO_LEDGER_OUTCOME.IN_PROGRESS;
 }
 
@@ -25,6 +29,9 @@ export function buildDemoLedgerProjection({ order, payment = null, earning = nul
   const outcome = resolveOutcome(order.status);
   const completed = outcome === DEMO_LEDGER_OUTCOME.COMPLETED;
   const matchingFailed = outcome === DEMO_LEDGER_OUTCOME.MATCHING_FAILED;
+  const cancelled = outcome === DEMO_LEDGER_OUTCOME.CANCELLED;
+  const reviewRequired = outcome === DEMO_LEDGER_OUTCOME.ADMIN_REVIEW_REQUIRED;
+  const fullyReversed = matchingFailed || cancelled;
 
   const testPaymentPaise = integerPaise(payment?.amountPaise);
   const estimatedTotalPaise = integerPaise(order.pricing?.estimatedCustomerTotalPaise);
@@ -48,14 +55,14 @@ export function buildDemoLedgerProjection({ order, payment = null, earning = nul
       )
     : 0;
 
-  const currentDemoTotalPaise = matchingFailed ? 0 : finalTotalPaise;
-  const customerAdjustmentPaise = matchingFailed
+  const currentDemoTotalPaise = fullyReversed ? 0 : finalTotalPaise;
+  const customerAdjustmentPaise = fullyReversed
     ? -testPaymentPaise
     : completed
       ? finalTotalPaise - testPaymentPaise
       : 0;
 
-  const demoRefundPaise = matchingFailed
+  const demoRefundPaise = fullyReversed
     ? testPaymentPaise
     : completed
       ? Math.max(0, testPaymentPaise - finalTotalPaise)
@@ -69,6 +76,12 @@ export function buildDemoLedgerProjection({ order, payment = null, earning = nul
   if (matchingFailed && testPaymentPaise > 0) {
     refundStatus = DEMO_REFUND_STATUS.MATCHING_FAILURE_REPRESENTED;
     refundReason = 'No delivery partner completed matching, so the full test payment is represented as refundable.';
+  } else if (cancelled && testPaymentPaise > 0) {
+    refundStatus = DEMO_REFUND_STATUS.CANCELLATION_REPRESENTED;
+    refundReason = 'The request was cancelled before food pickup, so the full confirmed test payment is represented as refundable.';
+  } else if (reviewRequired) {
+    refundStatus = DEMO_REFUND_STATUS.REVIEW_PENDING;
+    refundReason = 'The order has financial or fulfilment exposure that requires operations review before any refund or settlement outcome is represented.';
   } else if (completed && demoRefundPaise > 0) {
     refundStatus = DEMO_REFUND_STATUS.ADJUSTMENT_REPRESENTED;
     refundReason = 'The final demo total is lower than the original Razorpay test payment.';
@@ -116,7 +129,16 @@ export function buildDemoLedgerProjection({ order, payment = null, earning = nul
     settlement: {
       status: completed
         ? DEMO_SETTLEMENT_STATUS.REPRESENTED
-        : DEMO_SETTLEMENT_STATUS.NOT_APPLICABLE,
+        : reviewRequired
+          ? DEMO_SETTLEMENT_STATUS.REVIEW_REQUIRED
+          : DEMO_SETTLEMENT_STATUS.NOT_APPLICABLE,
+    },
+    recovery: {
+      event: order.recovery?.lastEvent ?? 'NONE',
+      actor: order.recovery?.lastActor ?? null,
+      reason: order.recovery?.reason ?? null,
+      occurredAt: order.recovery?.occurredAt ?? null,
+      rematchCount: order.recovery?.rematchCount ?? 0,
     },
     note:
       'Internal prototype accounting only. Razorpay Test Mode and this ledger do not represent real settlement, payout, extra charge, or refund movement.',
