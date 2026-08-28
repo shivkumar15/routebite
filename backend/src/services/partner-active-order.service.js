@@ -1,3 +1,4 @@
+import { DELIVERY_OPERATION_LIMITS } from '../constants/delivery.constants.js';
 import { Order } from '../models/order.model.js';
 import { Partner } from '../models/partner.model.js';
 import { AppError } from '../utils/app-error.js';
@@ -37,9 +38,24 @@ function toPartnerActiveOrder(order) {
       approvalExpiresAt: order.priceAdjustment?.approvalExpiresAt ?? null,
       resolvedAt: order.priceAdjustment?.resolvedAt ?? null,
     },
+    deliveryOtp: {
+      requestedAt: order.deliveryOtpRequestedAt ?? null,
+      generated: Boolean(
+        order.deliveryOtp?.generatedAt &&
+        order.deliveryOtp?.expiresAt &&
+        !order.deliveryOtp?.usedAt
+      ),
+      generatedAt: order.deliveryOtp?.generatedAt ?? null,
+      expiresAt: order.deliveryOtp?.expiresAt ?? null,
+      attempts: order.deliveryOtp?.attempts ?? 0,
+      maxAttempts: DELIVERY_OPERATION_LIMITS.DELIVERY_OTP_MAX_ATTEMPTS,
+      usedAt: order.deliveryOtp?.usedAt ?? null,
+    },
     pickupStartedAt: order.pickupStartedAt ?? null,
     pickedUpAt: order.pickedUpAt ?? null,
     deliveryStartedAt: order.deliveryStartedAt ?? null,
+    deliveredAt: order.deliveredAt ?? null,
+    completedAt: order.completedAt ?? null,
     assignedAt: order.updatedAt,
   };
 }

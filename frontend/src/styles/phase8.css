@@ -27,3 +27,29 @@
   flex-wrap: wrap;
   margin-top: 16px;
 }
+
+.delivery-otp-panel {
+  border-color: rgba(36, 138, 90, 0.28);
+  background: rgba(36, 138, 90, 0.07);
+}
+
+.delivery-otp-code {
+  display: grid;
+  gap: 4px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px dashed rgba(75, 32, 48, 0.24);
+  border-radius: 14px;
+  background: var(--color-surface);
+}
+
+.delivery-otp-code span,
+.delivery-otp-code small {
+  color: var(--color-text-muted);
+}
+
+.delivery-otp-code strong {
+  color: var(--color-brand-dark);
+  font-size: clamp(1.8rem, 6vw, 2.6rem);
+  letter-spacing: 0.18em;
+}

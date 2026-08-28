@@ -5,6 +5,10 @@ import {
   startPartnerPickup,
 } from '../controllers/delivery.controller.js';
 import {
+  requestPartnerDeliveryOtp,
+  verifyPartnerDeliveryOtp,
+} from '../controllers/delivery-otp.controller.js';
+import {
   accept as acceptOffer,
   list as listOffers,
   reject as rejectOffer,
@@ -31,7 +35,10 @@ import {
 } from '../controllers/trip.controller.js';
 import { requireApprovedPartner, requireAuth } from '../middleware/auth.middleware.js';
 import { validateRequest } from '../middleware/validate.middleware.js';
-import { actualFoodPriceValidators } from '../validators/delivery.validators.js';
+import {
+  actualFoodPriceValidators,
+  deliveryOtpValidators,
+} from '../validators/delivery.validators.js';
 import { offerIdValidators } from '../validators/offer.validators.js';
 import {
   partnerApplicationValidators,
@@ -58,6 +65,15 @@ router.post(
 );
 router.post('/active-order/confirm-pickup', requireAuth, requireApprovedPartner, confirmPartnerPickup);
 router.post('/active-order/start-delivery', requireAuth, requireApprovedPartner, startPartnerDelivery);
+router.post('/active-order/request-delivery-otp', requireAuth, requireApprovedPartner, requestPartnerDeliveryOtp);
+router.post(
+  '/active-order/verify-delivery-otp',
+  requireAuth,
+  requireApprovedPartner,
+  deliveryOtpValidators,
+  validateRequest,
+  verifyPartnerDeliveryOtp,
+);
 router.put(
   '/active-order/location',
   requireAuth,

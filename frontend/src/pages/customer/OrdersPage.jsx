@@ -11,9 +11,8 @@ function formatDate(value) {
 }
 
 function postPaymentActionLabel(status) {
-  if (status === 'OUT_FOR_DELIVERY' || status === 'DELIVERY_OTP_REQUIRED') {
-    return 'Track delivery';
-  }
+  if (status === 'DELIVERY_OTP_REQUIRED') return 'Confirm delivery';
+  if (status === 'OUT_FOR_DELIVERY') return 'Track delivery';
   if (status === 'MATCHING') return 'Matching details';
   return 'View order';
 }
@@ -69,6 +68,7 @@ export default function OrdersPage() {
           {orders.map((order) => {
             const canPay = ['DRAFT', 'AWAITING_PAYMENT'].includes(order.status);
             const postPayment = !canPay;
+            const needsImmediateAction = ['OUT_FOR_DELIVERY', 'DELIVERY_OTP_REQUIRED'].includes(order.status);
 
             return (
               <article className="order-summary-card" key={order.id}>
@@ -99,7 +99,7 @@ export default function OrdersPage() {
                   ) : null}
                   {postPayment ? (
                     <Link
-                      className={order.status === 'OUT_FOR_DELIVERY' ? 'primary-link' : 'secondary-link'}
+                      className={needsImmediateAction ? 'primary-link' : 'secondary-link'}
                       to={`/orders/${order.id}/checkout`}
                     >
                       {postPaymentActionLabel(order.status)}
