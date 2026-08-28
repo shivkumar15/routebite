@@ -96,9 +96,59 @@ This creates an isolated persisted `PENDING` offer and runs startup-equivalent o
 
 The fixtures are deleted afterward. This verifies that pending offer truth survives a process restart because MongoDB, not process memory, is authoritative.
 
+### Razorpay webhook idempotency rehearsal
+
+```powershell
+npm run hardening:webhook-idempotency -- --confirm-dev-db
+```
+
+The rehearsal uses an isolated synthetic webhook secret and temporary development fixtures. It delivers the same signed Razorpay `payment.captured` event twice and verifies:
+
+```text
+1 WebhookEvent
+1 payment confirmation
+1 matching attempt
+second delivery reported as duplicate
+```
+
+No real Razorpay webhook secret is required or printed. Fixtures are removed afterward.
+
+### Delivery completion idempotency rehearsal
+
+```powershell
+npm run hardening:completion-idempotency -- --confirm-dev-db
+```
+
+The rehearsal submits the same valid delivery OTP completion concurrently and verifies:
+
+```text
+1 successful COMPLETED transition
+1 conflicting/rejected duplicate
+1 PartnerEarning
+partner completedOrderCount increments once
+partner activeOrderId is released once
+OTP is consumed once
+```
+
+Fixtures are removed afterward.
+
+### Current development rehearsal status
+
+The following Phase 15 development-database rehearsals have been run successfully on the current branch:
+
+```text
+hardening:audit                  PASS · 0 errors / 0 warnings
+hardening:accept-race            PASS · exactly one winner
+hardening:restart-offer          PASS · persisted offer recovered after restart/expiry
+hardening:webhook-idempotency    PASS · duplicate event deduplicated
+hardening:completion-idempotency PASS · one completion / one earning
+```
+
+These results prove the tested development state at rehearsal time; the scripts remain repeatable and should be rerun before final merge if later hardening changes touch the relevant flows.
+
 ### CI protection
 
-GitHub Actions now runs:
+GitHub Actions runs:
 
 ```text
 hardening script syntax check
@@ -129,8 +179,8 @@ The dev-database rehearsal commands are intentionally not executed in CI because
 | Price approval timeout | Startup/interval maintenance → explicit review | Required |
 | Wrong delivery OTP | OTP tests | Required |
 | Expired/reused OTP | OTP tests | Required |
-| Duplicate completion | Completion transaction + unique earning | Required |
-| Duplicate Razorpay confirmation/callback | Payment/webhook idempotency | Required |
+| Duplicate completion | Completion transaction + unique earning + `hardening:completion-idempotency` | DB rehearsal required |
+| Duplicate Razorpay callback | Webhook event dedupe + `hardening:webhook-idempotency` | DB rehearsal required |
 | Browser refresh during active delivery | REST tracking reload | Required |
 | Socket disconnect/reconnect | Customer REST resync + partner offer reconnect resync | Required |
 | Server restart with pending offer | Startup maintenance + `hardening:restart-offer` | DB rehearsal required |
@@ -195,6 +245,8 @@ Recommended sequence:
 16. Run `npm run hardening:audit`.
 17. Run `npm run hardening:accept-race -- --confirm-dev-db`.
 18. Run `npm run hardening:restart-offer -- --confirm-dev-db`.
+19. Run `npm run hardening:webhook-idempotency -- --confirm-dev-db`.
+20. Run `npm run hardening:completion-idempotency -- --confirm-dev-db`.
 
 A separate final rehearsal must also prove a compatible **Scheduled / On My Way** partner path.
 
@@ -211,6 +263,8 @@ Phase 15 can merge only when:
 [ ] invariant audit has no unexplained ERROR
 [ ] accept-race rehearsal passes
 [ ] restart-offer rehearsal passes
+[ ] webhook-idempotency rehearsal passes
+[ ] completion-idempotency rehearsal passes
 [ ] AVAILABLE_NOW full happy path passes
 [ ] Scheduled / On My Way happy path passes
 [ ] core failure/recovery paths remain explicit
