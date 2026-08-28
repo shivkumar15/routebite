@@ -15,6 +15,7 @@ import PartnerApplyPage from './pages/partner/PartnerApplyPage.jsx';
 import PartnerDashboardPage from './pages/partner/PartnerDashboardPage.jsx';
 import PartnerEarningsPage from './pages/partner/PartnerEarningsPage.jsx';
 import PartnerOffersPage from './pages/partner/PartnerOffersPage.jsx';
+import PartnerRatingsPage from './pages/partner/PartnerRatingsPage.jsx';
 import AdminRoute from './routes/AdminRoute.jsx';
 import PartnerRoute from './routes/PartnerRoute.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
@@ -110,6 +111,14 @@ export default function App() {
         element={
           <PartnerRoute>
             <PartnerEarningsPage />
+          </PartnerRoute>
+        }
+      />
+      <Route
+        path="/partner/ratings"
+        element={
+          <PartnerRoute>
+            <PartnerRatingsPage />
           </PartnerRoute>
         }
       />
