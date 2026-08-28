@@ -14,10 +14,11 @@ function rupeesToPaise(value) {
   return Number.isSafeInteger(paise) ? paise : null;
 }
 
-export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange }) {
+export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange, onCompleted }) {
   const [order, setOrder] = useState(initialOrder);
   const [actualPrice, setActualPrice] = useState('');
   const [receiptFile, setReceiptFile] = useState(null);
+  const [deliveryOtp, setDeliveryOtp] = useState('');
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -43,33 +44,40 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange 
   useEffect(() => {
     if (!order) return undefined;
 
-    async function refreshForPriceEvent(payload) {
+    async function refreshActiveOrder(payload) {
       if (payload?.orderId !== order.id) return;
       try {
         const { data } = await api.get('/partner/active-order');
         if (!data.data.order) {
-          window.location.reload();
+          onCompleted?.({ id: order.id, status: payload.status ?? 'COMPLETED' });
           return;
         }
         applyOrder(data.data.order);
         if (payload.status === 'PARTNER_TO_PICKUP') {
           setMessage('Customer approved the higher food price.');
         }
+        if (payload.expiresAt) {
+          setMessage('Customer generated a delivery OTP. Ask them for the 6-digit code after handoff.');
+        }
       } catch {
         // REST remains authoritative; a later dashboard refresh can recover.
       }
     }
 
-    socket.on('price:approved', refreshForPriceEvent);
-    socket.on('price:rejected', refreshForPriceEvent);
-    socket.on('price:timed-out', refreshForPriceEvent);
+    socket.on('price:approved', refreshActiveOrder);
+    socket.on('price:rejected', refreshActiveOrder);
+    socket.on('price:timed-out', refreshActiveOrder);
+    socket.on('delivery:otp-generated', refreshActiveOrder);
+    socket.on('order:completed', refreshActiveOrder);
 
     return () => {
-      socket.off('price:approved', refreshForPriceEvent);
-      socket.off('price:rejected', refreshForPriceEvent);
-      socket.off('price:timed-out', refreshForPriceEvent);
+      socket.off('price:approved', refreshActiveOrder);
+      socket.off('price:rejected', refreshActiveOrder);
+      socket.off('price:timed-out', refreshActiveOrder);
+      socket.off('delivery:otp-generated', refreshActiveOrder);
+      socket.off('order:completed', refreshActiveOrder);
     };
-  }, [order, onOrderChange]);
+  }, [order, onOrderChange, onCompleted]);
 
   if (!order) return null;
 
@@ -133,8 +141,38 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange 
     }
   }
 
+  async function verifyOtp(event) {
+    event.preventDefault();
+    if (!/^\d{6}$/.test(deliveryOtp)) {
+      setError('Enter the 6-digit OTP shown to the customer.');
+      return;
+    }
+
+    setBusy('delivery-otp');
+    setError('');
+    setMessage('');
+    try {
+      const { data } = await api.post('/partner/active-order/verify-delivery-otp', {
+        otp: deliveryOtp,
+      });
+      setDeliveryOtp('');
+      onCompleted?.(data.data.completedOrder);
+    } catch (requestError) {
+      const details = requestError.response?.data?.error?.details;
+      const suffix = Number.isInteger(details?.attemptsRemaining)
+        ? ` ${details.attemptsRemaining} attempt${details.attemptsRemaining === 1 ? '' : 's'} remaining for this code.`
+        : '';
+      setError(
+        `${requestError.response?.data?.error?.message ?? 'Could not verify the delivery OTP.'}${suffix}`,
+      );
+    } finally {
+      setBusy('');
+    }
+  }
+
   const adjustment = order.priceAdjustment ?? {};
   const priceReported = adjustment.actualFoodCostPaise != null;
+  const otpState = order.deliveryOtp ?? {};
 
   return (
     <section className="partner-section-card active-delivery-card">
@@ -280,8 +318,52 @@ export default function ActiveDeliveryCard({ order: initialOrder, onOrderChange 
       {order.status === 'OUT_FOR_DELIVERY' ? (
         <div className="active-delivery-next-step live-tracking-partner-panel">
           <strong>Live delivery tracking is active</strong>
-          <p>Keep this partner page open while travelling. RouteBite sends your foreground location roughly every 12 seconds; delivery OTP and completion come in Phase 10.</p>
+          <p>Keep this page open while travelling. When you are physically at the customer drop, request delivery confirmation.</p>
+          <button
+            className="primary-button"
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => runAction('/partner/active-order/request-delivery-otp', 'Delivery confirmation requested. Ask the customer to generate their OTP.')}
+          >
+            {busy ? 'Requesting…' : 'I reached the customer · Request OTP'}
+          </button>
         </div>
+      ) : null}
+
+      {order.status === 'DELIVERY_OTP_REQUIRED' ? (
+        <form className="active-delivery-price-form" onSubmit={verifyOtp}>
+          <div>
+            <strong>Confirm handoff with the customer OTP</strong>
+            <p>
+              {otpState.generated
+                ? `A customer OTP is active until ${new Date(otpState.expiresAt).toLocaleTimeString()}. Ask for it only after the customer has the food.`
+                : 'Waiting for the customer to generate a 6-digit delivery OTP on their order page.'}
+            </p>
+          </div>
+          <label>
+            Customer delivery OTP
+            <input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={deliveryOtp}
+              onChange={(event) => setDeliveryOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="6-digit OTP"
+              disabled={!otpState.generated || Boolean(busy)}
+              required
+            />
+          </label>
+          <small>
+            {otpState.attempts ?? 0} of {otpState.maxAttempts ?? 5} incorrect attempts used for the current code.
+          </small>
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={!otpState.generated || Boolean(busy) || deliveryOtp.length !== 6}
+          >
+            {busy === 'delivery-otp' ? 'Verifying…' : 'Verify OTP & complete delivery'}
+          </button>
+        </form>
       ) : null}
     </section>
   );
