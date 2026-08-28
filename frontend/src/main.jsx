@@ -12,6 +12,7 @@ import './styles/matching.css';
 import './styles/offer.css';
 import './styles/active-delivery.css';
 import './styles/phase8.css';
+import './styles/tracking.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
