@@ -25,4 +25,11 @@ describe('Phase 14 rating route contracts', () => {
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('AUTH_REQUIRED');
   });
+
+  test('reading received partner reviews requires authentication', async () => {
+    const response = await request(app).get('/api/v1/partner/ratings');
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_REQUIRED');
+  });
 });
