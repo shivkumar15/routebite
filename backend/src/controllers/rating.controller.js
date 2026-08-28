@@ -1,5 +1,6 @@
 import {
   getCustomerOrderRating,
+  getPartnerReceivedRatings,
   submitCustomerRating,
 } from '../services/rating.service.js';
 
@@ -24,6 +25,15 @@ export async function create(req, res, next) {
       feedback: req.body.feedback ?? '',
     });
     res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function partnerReviews(req, res, next) {
+  try {
+    const result = await getPartnerReceivedRatings(req.auth.partnerId);
+    res.status(200).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
