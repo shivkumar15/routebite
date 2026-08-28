@@ -25,6 +25,9 @@ jobs:
       - name: Install backend dependencies
         run: npm install
 
+      - name: Check hardening scripts
+        run: npm run hardening:syntax
+
       - name: Run backend tests
         run: npm test
 
