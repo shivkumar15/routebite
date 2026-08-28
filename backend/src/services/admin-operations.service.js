@@ -1,4 +1,7 @@
+import { MATCHING_ATTEMPT_STATUS } from '../constants/matching.constants.js';
+import { OFFER_STATUS } from '../constants/offer.constants.js';
 import { ORDER_STATUS } from '../constants/order.constants.js';
+import { PAYMENT_STATUS } from '../constants/payment.constants.js';
 import { MatchingAttempt } from '../models/matching-attempt.model.js';
 import { Offer } from '../models/offer.model.js';
 import { Order } from '../models/order.model.js';
@@ -8,6 +11,7 @@ import { Payment } from '../models/payment.model.js';
 import { UploadAsset } from '../models/upload-asset.model.js';
 import { User } from '../models/user.model.js';
 import { AppError } from '../utils/app-error.js';
+import { buildDemoLedgerProjection } from './accounting.service.js';
 import { createAuthenticatedAssetUrl } from './upload.service.js';
 
 const ATTENTION_STATUSES = [
@@ -136,6 +140,23 @@ function addTimeline(events, at, type, title, detail = null, tone = 'neutral') {
   events.push({ at, type, title, detail, tone });
 }
 
+function matchingAttemptTone(status) {
+  if (
+    status === MATCHING_ATTEMPT_STATUS.NO_CANDIDATES ||
+    status === MATCHING_ATTEMPT_STATUS.FAILED
+  ) {
+    return 'danger';
+  }
+  if (status === MATCHING_ATTEMPT_STATUS.CANDIDATES_READY) return 'good';
+  return 'neutral';
+}
+
+function offerTone(status) {
+  if (status === OFFER_STATUS.ACCEPTED) return 'good';
+  if (status === OFFER_STATUS.EXPIRED) return 'warning';
+  return 'neutral';
+}
+
 function buildTimeline({ order, payments, attempts, offers, earning }) {
   const events = [];
 
@@ -182,7 +203,7 @@ function buildTimeline({ order, payments, attempts, offers, earning }) {
       `Matching attempt ${attempt.attemptNumber}: ${attempt.status}`,
       attempt.failureReason ||
         `${attempt.eligibleCandidateCount} eligible of ${attempt.discoveredCandidateCount} discovered`,
-      attempt.status === 'NO_CANDIDATES' ? 'danger' : 'good',
+      matchingAttemptTone(attempt.status),
     );
   }
 
@@ -200,7 +221,7 @@ function buildTimeline({ order, payments, attempts, offers, earning }) {
       'OFFER_RESOLVED',
       `Offer ${offer.status.toLowerCase()}`,
       `Partner ${shortId(offer.partnerId)}`,
-      offer.status === 'ACCEPTED' ? 'good' : offer.status === 'EXPIRED' ? 'warning' : 'neutral',
+      offerTone(offer.status),
     );
   }
 
@@ -214,10 +235,20 @@ function buildTimeline({ order, payments, attempts, offers, earning }) {
       ? `₹${(order.priceAdjustment.actualFoodCostPaise / 100).toFixed(2)} · ${order.priceAdjustment.status}`
       : order.priceAdjustment?.status,
   );
-  addTimeline(events, order.priceAdjustment?.resolvedAt, 'PRICE_RESOLVED', `Price adjustment ${order.priceAdjustment?.status}`);
+  addTimeline(
+    events,
+    order.priceAdjustment?.resolvedAt,
+    'PRICE_RESOLVED',
+    `Price adjustment ${order.priceAdjustment?.status}`,
+  );
   addTimeline(events, order.pickedUpAt, 'PICKED_UP', 'Food picked up', null, 'good');
   addTimeline(events, order.deliveryStartedAt, 'OUT_FOR_DELIVERY', 'Delivery started');
-  addTimeline(events, order.deliveryOtpRequestedAt, 'DELIVERY_OTP_REQUIRED', 'Partner requested delivery OTP');
+  addTimeline(
+    events,
+    order.deliveryOtpRequestedAt,
+    'DELIVERY_OTP_REQUIRED',
+    'Partner requested delivery OTP',
+  );
   addTimeline(events, order.deliveredAt, 'DELIVERED', 'Delivery OTP verified', null, 'good');
   addTimeline(events, order.completedAt, 'COMPLETED', 'Order completed', null, 'good');
 
@@ -327,7 +358,12 @@ export async function listAdminOrders({ filter = 'ALL' } = {}) {
         deliveryWindowStart: order.deliveryWindowStart,
         deliveryWindowEnd: order.deliveryWindowEnd,
         customer: customer
-          ? { id: customer._id.toString(), name: customer.name, email: customer.email, phone: customer.phone }
+          ? {
+              id: customer._id.toString(),
+              name: customer.name,
+              email: customer.email,
+              phone: customer.phone,
+            }
           : null,
         assignedPartnerId: partner?._id?.toString() ?? null,
         assignedPartnerShortId: partner ? shortId(partner._id) : null,
@@ -339,7 +375,10 @@ export async function listAdminOrders({ filter = 'ALL' } = {}) {
               confirmedAt: payment.confirmedAt,
             }
           : null,
-        totalPaise: order.pricing?.finalCustomerTotalPaise ?? order.pricing?.estimatedCustomerTotalPaise ?? 0,
+        totalPaise:
+          order.pricing?.finalCustomerTotalPaise ??
+          order.pricing?.estimatedCustomerTotalPaise ??
+          0,
         recovery: {
           lastEvent: order.recovery?.lastEvent ?? 'NONE',
           reason: order.recovery?.reason ?? null,
@@ -357,11 +396,16 @@ export async function listAdminOrders({ filter = 'ALL' } = {}) {
 export async function getAdminOrderDetail(orderId) {
   const order = await Order.findById(orderId).lean();
   if (!order) {
-    throw new AppError('Order not found.', { statusCode: 404, code: 'ORDER_NOT_FOUND' });
+    throw new AppError('Order not found.', {
+      statusCode: 404,
+      code: 'ORDER_NOT_FOUND',
+    });
   }
 
   const [customer, assignedPartner, payments, attempts, offers, earning] = await Promise.all([
-    User.findById(order.customerId).select('_id name email phone emailVerified phoneVerified').lean(),
+    User.findById(order.customerId)
+      .select('_id name email phone emailVerified phoneVerified')
+      .lean(),
     order.assignedPartnerId ? Partner.findById(order.assignedPartnerId).lean() : null,
     Payment.find({ orderId: order._id }).sort({ createdAt: -1 }).lean(),
     MatchingAttempt.find({ orderId: order._id }).sort({ attemptNumber: 1 }).lean(),
@@ -371,16 +415,28 @@ export async function getAdminOrderDetail(orderId) {
 
   let partnerUser = null;
   if (assignedPartner?.userId) {
-    partnerUser = await User.findById(assignedPartner.userId).select('_id name email phone').lean();
+    partnerUser = await User.findById(assignedPartner.userId)
+      .select('_id name email phone')
+      .lean();
   }
 
   let receiptUrl = null;
   if (order.priceAdjustment?.receiptAssetId) {
-    const receipt = await UploadAsset.findById(order.priceAdjustment.receiptAssetId).select('+publicId');
+    const receipt = await UploadAsset.findById(order.priceAdjustment.receiptAssetId).select(
+      '+publicId',
+    );
     if (receipt) receiptUrl = createAuthenticatedAssetUrl(receipt);
   }
 
   const timeline = buildTimeline({ order, payments, attempts, offers, earning });
+  const confirmedPayment = payments.find(
+    (payment) => payment.status === PAYMENT_STATUS.CONFIRMED,
+  );
+  const demoLedger = buildDemoLedgerProjection({
+    order,
+    payment: confirmedPayment ?? null,
+    earning,
+  });
 
   return {
     order: {
@@ -397,9 +453,9 @@ export async function getAdminOrderDetail(orderId) {
       deliveryWindowEnd: order.deliveryWindowEnd,
       assignedPartnerId: order.assignedPartnerId?.toString() ?? null,
       assignedTripId: order.assignedTripId?.toString() ?? null,
-      pricing: order.pricing,
+      pricing: order.pricing ?? {},
       priceAdjustment: {
-        ...order.priceAdjustment,
+        ...(order.priceAdjustment ?? {}),
         receiptUrl,
       },
       recovery: {
@@ -408,7 +464,9 @@ export async function getAdminOrderDetail(orderId) {
         reason: order.recovery?.reason ?? null,
         occurredAt: order.recovery?.occurredAt ?? null,
         rematchCount: order.recovery?.rematchCount ?? 0,
-        excludedPartnerIds: (order.recovery?.excludedPartnerIds ?? []).map((id) => id.toString()),
+        excludedPartnerIds: (order.recovery?.excludedPartnerIds ?? []).map((id) =>
+          id.toString(),
+        ),
       },
       timestamps: {
         createdAt: order.createdAt,
@@ -436,6 +494,7 @@ export async function getAdminOrderDetail(orderId) {
           earnedAt: earning.earnedAt,
         }
       : null,
+    demoLedger,
     timeline,
   };
 }
