@@ -73,7 +73,10 @@ export default function PartnerReviewPage() {
             <h1>Partner verification queue</h1>
             <p>Review campus identity before allowing a partner to receive delivery offers.</p>
           </div>
-          <Link className="secondary-link" to="/account">Account</Link>
+          <div className="admin-ops-nav">
+            <Link className="secondary-link" to="/admin/orders">Order operations</Link>
+            <Link className="secondary-link" to="/account">Account</Link>
+          </div>
         </div>
 
         {error ? <p className="form-error">{error}</p> : null}
