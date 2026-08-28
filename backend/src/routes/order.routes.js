@@ -9,6 +9,7 @@ import {
   paymentStatus,
   verifyPayment,
 } from '../controllers/payment.controller.js';
+import { create as createRating, detail as ratingDetail } from '../controllers/rating.controller.js';
 import { cancelCustomer } from '../controllers/recovery.controller.js';
 import { customerTracking } from '../controllers/tracking.controller.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
@@ -19,6 +20,7 @@ import {
   paymentStatusValidators,
   verifyPaymentValidators,
 } from '../validators/payment.validators.js';
+import { ratingValidators } from '../validators/rating.validators.js';
 import { recoveryReasonValidators } from '../validators/recovery.validators.js';
 
 const router = Router();
@@ -33,6 +35,13 @@ router.post('/:orderId/payment/verify', verifyPaymentValidators, validateRequest
 router.get('/:orderId/matching', orderIdValidators, validateRequest, matchingDetail);
 router.get('/:orderId/tracking', orderIdValidators, validateRequest, customerTracking);
 router.get('/:orderId/demo-ledger', orderIdValidators, validateRequest, customerDemoLedger);
+router.get('/:orderId/rating', orderIdValidators, validateRequest, ratingDetail);
+router.post(
+  '/:orderId/rating',
+  [...orderIdValidators, ...ratingValidators],
+  validateRequest,
+  createRating,
+);
 router.post('/:orderId/delivery-otp', orderIdValidators, validateRequest, generateDeliveryOtp);
 router.post(
   '/:orderId/cancel',
