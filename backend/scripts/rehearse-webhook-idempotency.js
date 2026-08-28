@@ -1,18 +1,8 @@
 import { createHmac } from 'node:crypto';
 import mongoose from 'mongoose';
-import { connectDatabase } from '../src/config/db.js';
-import { env } from '../src/config/env.js';
-import { DELIVERY_TYPE, ORDER_STATUS } from '../src/constants/order.constants.js';
-import { PAYMENT_STATUS } from '../src/constants/payment.constants.js';
-import { MatchingAttempt } from '../src/models/matching-attempt.model.js';
-import { Offer } from '../src/models/offer.model.js';
-import { Order } from '../src/models/order.model.js';
-import { Payment } from '../src/models/payment.model.js';
-import { User } from '../src/models/user.model.js';
-import { WebhookEvent } from '../src/models/webhook-event.model.js';
-import { handleRazorpayWebhook } from '../src/services/webhook.service.js';
 
 const CONFIRM_FLAG = '--confirm-dev-db';
+const REHEARSAL_WEBHOOK_SECRET = 'routebite-phase15-isolated-webhook-secret';
 
 function assertExplicitConfirmation() {
   if (!process.argv.includes(CONFIRM_FLAG)) {
@@ -27,19 +17,81 @@ function assertExplicitConfirmation() {
     console.error('Refusing to run webhook hardening with NODE_ENV=production.');
     process.exit(2);
   }
-
-  if (!env.razorpay.webhookSecret) {
-    console.error('RAZORPAY_WEBHOOK_SECRET is required for this rehearsal.');
-    process.exit(2);
-  }
 }
 
 function point(longitude, latitude) {
   return { type: 'Point', coordinates: [longitude, latitude] };
 }
 
+async function loadRouteBiteModules() {
+  // The rehearsal signs an isolated synthetic webhook. It must not depend on,
+  // print, or overwrite a developer's real Razorpay webhook secret.
+  process.env.RAZORPAY_WEBHOOK_SECRET = REHEARSAL_WEBHOOK_SECRET;
+
+  const [
+    { connectDatabase },
+    { env },
+    { DELIVERY_TYPE, ORDER_STATUS },
+    { PAYMENT_STATUS },
+    { MatchingAttempt },
+    { Offer },
+    { Order },
+    { Payment },
+    { User },
+    { WebhookEvent },
+    { handleRazorpayWebhook },
+  ] = await Promise.all([
+    import('../src/config/db.js'),
+    import('../src/config/env.js'),
+    import('../src/constants/order.constants.js'),
+    import('../src/constants/payment.constants.js'),
+    import('../src/models/matching-attempt.model.js'),
+    import('../src/models/offer.model.js'),
+    import('../src/models/order.model.js'),
+    import('../src/models/payment.model.js'),
+    import('../src/models/user.model.js'),
+    import('../src/models/webhook-event.model.js'),
+    import('../src/services/webhook.service.js'),
+  ]);
+
+  if (env.razorpay.webhookSecret !== REHEARSAL_WEBHOOK_SECRET) {
+    throw new Error('Webhook rehearsal could not install its isolated signing secret.');
+  }
+
+  return {
+    connectDatabase,
+    env,
+    DELIVERY_TYPE,
+    ORDER_STATUS,
+    PAYMENT_STATUS,
+    MatchingAttempt,
+    Offer,
+    Order,
+    Payment,
+    User,
+    WebhookEvent,
+    handleRazorpayWebhook,
+  };
+}
+
 async function main() {
   assertExplicitConfirmation();
+
+  const {
+    connectDatabase,
+    env,
+    DELIVERY_TYPE,
+    ORDER_STATUS,
+    PAYMENT_STATUS,
+    MatchingAttempt,
+    Offer,
+    Order,
+    Payment,
+    User,
+    WebhookEvent,
+    handleRazorpayWebhook,
+  } = await loadRouteBiteModules();
+
   await connectDatabase();
 
   const tag = `hardening_webhook_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -113,7 +165,7 @@ async function main() {
       .update(rawBody)
       .digest('hex');
 
-    console.log('Sending the same signed Razorpay event twice...');
+    console.log('Sending the same signed synthetic Razorpay event twice...');
     const first = await handleRazorpayWebhook({ rawBody, signature, eventId });
     const second = await handleRazorpayWebhook({ rawBody, signature, eventId });
 
