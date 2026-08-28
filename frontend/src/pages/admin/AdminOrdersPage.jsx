@@ -156,7 +156,15 @@ export default function AdminOrdersPage() {
                 <div><span>Rematches</span><strong>{order.recovery.rematchCount}</strong></div>
               </div>
 
-              {order.recovery.reason ? (
+              {order.stopReason ? (
+                <div className="admin-recovery-callout">
+                  <strong>{order.stopReason.title}</strong>
+                  <span>{order.stopReason.reason}</span>
+                  {order.stopReason.detail ? (
+                    <span>{readableStatus(order.stopReason.detail)}</span>
+                  ) : null}
+                </div>
+              ) : order.recovery.reason ? (
                 <div className="admin-recovery-callout">
                   <strong>{readableStatus(order.recovery.lastEvent)}</strong>
                   <span>{order.recovery.reason}</span>
