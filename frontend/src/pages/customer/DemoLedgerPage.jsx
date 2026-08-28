@@ -61,6 +61,7 @@ export default function DemoLedgerPage() {
 
   const completed = ledger.outcome === 'COMPLETED';
   const matchingFailed = ledger.outcome === 'MATCHING_FAILED';
+  const hasAdjustment = Number(ledger.customer.adjustmentPaise ?? 0) !== 0;
 
   return (
     <main className="ledger-shell">
@@ -102,10 +103,16 @@ export default function DemoLedgerPage() {
             <div><span>Razorpay test payment</span><strong>{formatMoney(ledger.customer.testPaymentPaise)}</strong></div>
             <div><span>Estimated total</span><strong>{formatMoney(ledger.customer.estimatedTotalPaise)}</strong></div>
             <div><span>Current demo total</span><strong>{formatMoney(ledger.customer.currentDemoTotalPaise)}</strong></div>
-            <div><span>Demo adjustment</span><strong>{formatSignedMoney(ledger.customer.adjustmentPaise)}</strong></div>
+            <div><span>Net order adjustment</span><strong>{formatSignedMoney(ledger.customer.adjustmentPaise)}</strong></div>
             <div><span>Demo refund represented</span><strong>{formatMoney(ledger.customer.demoRefundPaise)}</strong></div>
             <div><span>Demo extra charge represented</span><strong>{formatMoney(ledger.customer.demoAdditionalChargePaise)}</strong></div>
           </div>
+
+          {hasAdjustment ? (
+            <p className="ledger-footnote">
+              The net order adjustment is the accounting change from the original test-payment amount to the current demo total. Refund or extra-charge figures below describe the resulting outcome; they are not additional transactions on top of this adjustment.
+            </p>
+          ) : null}
         </section>
 
         {matchingFailed ? (
@@ -114,7 +121,7 @@ export default function DemoLedgerPage() {
             <h2>Full demo refund represented</h2>
             <strong>{formatMoney(ledger.refund.amountPaise)}</strong>
             <p>{ledger.refund.reason}</p>
-            <small>{humanize(ledger.refund.status)} · no live provider refund was issued by this prototype flow.</small>
+            <small>{humanize(ledger.refund.status)} · this refund is the outcome of the net order adjustment above; no live provider refund was issued by this prototype flow.</small>
           </section>
         ) : null}
 
