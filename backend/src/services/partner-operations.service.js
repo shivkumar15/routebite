@@ -10,8 +10,8 @@ import {
 import { Offer } from '../models/offer.model.js';
 import { Partner } from '../models/partner.model.js';
 import { Trip } from '../models/trip.model.js';
-import { dispatchNextOfferBatch } from './offer.service.js';
 import { AppError } from '../utils/app-error.js';
+import { dispatchNextOfferBatch } from './offer.service.js';
 
 function toOperationalPartner(partner) {
   const coordinates = partner.currentLocation?.coordinates;
@@ -20,6 +20,8 @@ function toOperationalPartner(partner) {
     id: partner._id.toString(),
     verificationStatus: partner.verificationStatus,
     availabilityStatus: partner.availabilityStatus,
+    ratingAverage: Number(partner.ratingAverage ?? 0),
+    ratingCount: Number(partner.ratingCount ?? 0),
     currentLocation: coordinates
       ? {
           longitude: coordinates[0],
