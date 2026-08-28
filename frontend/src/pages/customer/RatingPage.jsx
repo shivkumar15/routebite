@@ -61,7 +61,7 @@ export default function RatingPage() {
 
   const submitted = Boolean(payload?.rating);
   const partnerAverage = useMemo(() => {
-    if (!payload?.partner?.ratingCount) return 'New partner rating';
+    if (!payload?.partner?.ratingCount) return 'No previous customer ratings';
     return `${Number(payload.partner.ratingAverage).toFixed(1)} / 5 from ${payload.partner.ratingCount} rating${payload.partner.ratingCount === 1 ? '' : 's'}`;
   }, [payload]);
 
@@ -82,6 +82,7 @@ export default function RatingPage() {
       setPayload({
         canRate: false,
         rating: data.data.rating,
+        order: data.data.order,
         partner: data.data.partner,
       });
     } catch (requestError) {
@@ -121,14 +122,25 @@ export default function RatingPage() {
 
         {!error && payload ? (
           <>
-            <div className="rating-partner-summary">
-              <span>Partner rating now</span>
-              <strong>{partnerAverage}</strong>
-            </div>
+            <section className="rating-who-card" aria-label="Partner being rated">
+              <div>
+                <p className="eyebrow">You are rating</p>
+                <h2>{payload.partner?.name ?? `Partner #${payload.partner?.partnerShortId ?? '—'}`}</h2>
+                <p>
+                  Partner #{payload.partner?.partnerShortId ?? '—'} · {partnerAverage}
+                </p>
+              </div>
+              <div className="rating-order-context">
+                <span>Completed order</span>
+                <strong>#{payload.order?.shortId ?? '—'} · {payload.order?.vendorDisplayName ?? 'RouteBite delivery'}</strong>
+                <small>{payload.order?.pickupText ?? 'Pickup'} → {payload.order?.dropText ?? 'Drop'}</small>
+                <small>{formatDate(payload.order?.completedAt)}</small>
+              </div>
+            </section>
 
             <form className="rating-form" onSubmit={submitRating}>
               <div className="rating-star-panel">
-                <span className="rating-question">Your score</span>
+                <span className="rating-question">Your score for {payload.partner?.name ?? 'this partner'}</span>
                 <div className="rating-stars" role="radiogroup" aria-label="Partner rating">
                   {STAR_VALUES.map((value) => (
                     <button
@@ -151,11 +163,11 @@ export default function RatingPage() {
               </div>
 
               <label className="rating-feedback-field">
-                Optional feedback
+                Optional feedback for the partner
                 <textarea
                   value={feedback}
                   onChange={(event) => setFeedback(event.target.value.slice(0, 500))}
-                  placeholder="What went well, or what could be improved?"
+                  placeholder="What went well, or what could be improved? The partner will be able to read this feedback."
                   rows={5}
                   maxLength={500}
                   disabled={submitted || busy}
@@ -165,12 +177,12 @@ export default function RatingPage() {
 
               {submitted ? (
                 <div className="rating-submitted-note">
-                  <strong>Rating submitted</strong>
+                  <strong>Rating submitted for {payload.partner?.name ?? 'this partner'}</strong>
                   <span>{formatDate(payload.rating.createdAt)}</span>
                 </div>
               ) : (
                 <button className="primary-button rating-submit" type="submit" disabled={busy || !score}>
-                  {busy ? 'Submitting…' : 'Submit partner rating'}
+                  {busy ? 'Submitting…' : `Submit rating for ${payload.partner?.name ?? 'partner'}`}
                 </button>
               )}
             </form>
