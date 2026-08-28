@@ -1,0 +1,134 @@
+.live-tracking-card {
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid rgba(36, 138, 90, 0.22);
+  border-radius: 18px;
+  background: linear-gradient(145deg, #fffdf9, #f4fbf7);
+}
+
+.live-tracking-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.live-tracking-heading h3 {
+  margin: 4px 0 0;
+  color: var(--color-brand-dark);
+}
+
+.live-tracking-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(36, 138, 90, 0.1);
+  color: var(--color-success);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.live-tracking-badge > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 5px rgba(36, 138, 90, 0.1);
+}
+
+.live-tracking-badge.is-stale {
+  background: rgba(242, 164, 58, 0.12);
+  color: #9b6417;
+}
+
+.live-route-visual {
+  display: grid;
+  grid-template-columns: auto minmax(80px, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.live-route-line {
+  position: relative;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(75, 32, 48, 0.12);
+  overflow: hidden;
+}
+
+.live-route-line i {
+  display: block;
+  width: 55%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-brand);
+}
+
+.live-route-rider {
+  color: var(--color-brand);
+  font-size: 1.1rem;
+}
+
+.live-tracking-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.live-tracking-grid > div {
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+}
+
+.live-tracking-grid span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.live-tracking-grid strong {
+  color: var(--color-text);
+  font-size: 0.92rem;
+}
+
+.live-tracking-waiting,
+.live-tracking-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.55;
+}
+
+.live-tracking-note {
+  margin-top: 14px;
+  font-size: 0.78rem;
+}
+
+.live-tracking-partner-panel {
+  border-left: 3px solid var(--color-success);
+}
+
+@media (max-width: 620px) {
+  .live-tracking-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .live-tracking-badge {
+    align-self: flex-start;
+  }
+
+  .live-tracking-grid {
+    grid-template-columns: 1fr;
+  }
+}
