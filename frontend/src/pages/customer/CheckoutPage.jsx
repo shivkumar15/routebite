@@ -49,6 +49,7 @@ export default function CheckoutPage() {
   const [payment, setPayment] = useState(null);
   const [matching, setMatching] = useState(null);
   const [tracking, setTracking] = useState(null);
+  const [revealedOtp, setRevealedOtp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -124,6 +125,14 @@ export default function CheckoutPage() {
       refreshForEvent(payload, 'Your partner confirmed that the food has been picked up.');
     const onDeliveryStarted = (payload) =>
       refreshForEvent(payload, 'Your partner started the delivery. Live location is now active.');
+    const onOtpRequired = (payload) => {
+      setRevealedOtp(null);
+      return refreshForEvent(payload, 'Your partner reached the drop. Generate a delivery OTP after you are ready to receive the food.');
+    };
+    const onCompleted = (payload) => {
+      setRevealedOtp(null);
+      return refreshForEvent(payload, 'Delivery confirmed. This RouteBite request is complete.');
+    };
     const onPriceTimedOut = (payload) =>
       refreshForEvent(payload, 'Price approval timed out and this order needs review.');
     const onDeliveryLocation = (payload) => {
@@ -153,6 +162,8 @@ export default function CheckoutPage() {
     socket.on('price:resolved', onPriceResolved);
     socket.on('order:picked-up', onPickedUp);
     socket.on('order:delivery-started', onDeliveryStarted);
+    socket.on('order:delivery-otp-required', onOtpRequired);
+    socket.on('order:completed', onCompleted);
     socket.on('delivery:location', onDeliveryLocation);
     socket.on('price:timed-out', onPriceTimedOut);
     socket.on('system:connected', onConnected);
@@ -166,6 +177,8 @@ export default function CheckoutPage() {
       socket.off('price:resolved', onPriceResolved);
       socket.off('order:picked-up', onPickedUp);
       socket.off('order:delivery-started', onDeliveryStarted);
+      socket.off('order:delivery-otp-required', onOtpRequired);
+      socket.off('order:completed', onCompleted);
       socket.off('delivery:location', onDeliveryLocation);
       socket.off('price:timed-out', onPriceTimedOut);
       socket.off('system:connected', onConnected);
@@ -292,6 +305,25 @@ export default function CheckoutPage() {
     }
   }
 
+  async function handleGenerateDeliveryOtp() {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const { data } = await api.post(`/orders/${orderId}/delivery-otp`);
+      setOrder(data.data.order);
+      setRevealedOtp(data.data.deliveryOtp);
+      setMessage('Fresh delivery OTP generated. Share it only after the food is physically with you.');
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.error?.message ??
+          'Could not generate a delivery OTP.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) {
     return <main className="order-shell"><p>Loading checkout…</p></main>;
   }
@@ -309,6 +341,7 @@ export default function CheckoutPage() {
 
   const pricing = order.pricing;
   const adjustment = order.priceAdjustment ?? {};
+  const otpState = order.deliveryOtp ?? {};
   const confirmed = payment?.status === 'PAYMENT_CONFIRMED';
   const payable = ['DRAFT', 'AWAITING_PAYMENT'].includes(order.status);
   const matchingActive = order.status === 'MATCHING';
@@ -423,6 +456,47 @@ export default function CheckoutPage() {
             </div>
             <LiveTrackingCard tracking={tracking} dropLabel={order.drop.label} />
           </>
+        ) : null}
+
+        {confirmed && order.status === 'DELIVERY_OTP_REQUIRED' ? (
+          <>
+            <div className="price-approval-panel delivery-otp-panel">
+              <strong>Partner is at your drop — confirm only after handoff</strong>
+              <p>
+                Generate a 6-digit delivery OTP and tell it to the partner only after you have physically received the food. RouteBite stores only a hash of the code.
+              </p>
+              {revealedOtp ? (
+                <div className="delivery-otp-code">
+                  <span>Your delivery OTP</span>
+                  <strong>{revealedOtp.otp}</strong>
+                  <small>Expires {formatDate(revealedOtp.expiresAt)}</small>
+                </div>
+              ) : otpState.generated ? (
+                <p>
+                  An OTP is already active until {formatDate(otpState.expiresAt)}, but RouteBite cannot reveal it again after refresh. Generate a new code if you no longer have it.
+                </p>
+              ) : (
+                <p>No OTP has been generated yet.</p>
+              )}
+              <button
+                className="primary-button"
+                type="button"
+                disabled={busy}
+                onClick={handleGenerateDeliveryOtp}
+              >
+                {busy ? 'Generating…' : otpState.generated ? 'Generate a new OTP' : 'Generate delivery OTP'}
+              </button>
+            </div>
+            <LiveTrackingCard tracking={tracking} dropLabel={order.drop.label} />
+          </>
+        ) : null}
+
+        {confirmed && order.status === 'COMPLETED' ? (
+          <div className="checkout-success-panel">
+            <strong>Delivery completed</strong>
+            <p>The delivery OTP was verified, the partner was released from this order, and RouteBite recorded completion once.</p>
+            {order.completedAt ? <small>Completed {formatDate(order.completedAt)}</small> : null}
+          </div>
         ) : null}
 
         {confirmed && order.status === 'CANCELLED' && adjustment.status === 'REJECTED' ? (
