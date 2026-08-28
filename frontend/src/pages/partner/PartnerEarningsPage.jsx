@@ -70,6 +70,7 @@ export default function PartnerEarningsPage() {
           </div>
           <div className="earnings-header-actions">
             <Link className="secondary-link" to="/partner">Partner workspace</Link>
+            <Link className="secondary-link" to="/partner/ratings">Customer reviews</Link>
             <Link className="secondary-link" to="/partner/offers">Delivery offers</Link>
           </div>
         </header>
@@ -77,14 +78,14 @@ export default function PartnerEarningsPage() {
         {error ? <p className="form-error">{error}</p> : null}
 
         {!error && rating ? (
-          <div className="rating-partner-summary partner-rating-summary">
-            <span>Customer rating</span>
+          <Link className="rating-partner-summary partner-rating-summary partner-rating-link" to="/partner/ratings">
+            <span>Customer rating · open reviews</span>
             <strong>
               {rating.count > 0
                 ? `★ ${rating.average.toFixed(1)} / 5 · ${rating.count} rating${rating.count === 1 ? '' : 's'}`
                 : 'No customer ratings yet'}
             </strong>
-          </div>
+          </Link>
         ) : null}
 
         {!error && summary ? (
