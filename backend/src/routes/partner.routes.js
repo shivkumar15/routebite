@@ -22,6 +22,7 @@ import {
   updateAvailability,
   updateLocation,
 } from '../controllers/partner.controller.js';
+import { partnerReviews } from '../controllers/rating.controller.js';
 import { partnerCannotComplete } from '../controllers/recovery.controller.js';
 import {
   startPartnerDelivery,
@@ -58,6 +59,7 @@ router.get('/profile', requireAuth, me);
 router.get('/operational-state', requireAuth, requireApprovedPartner, operationalState);
 router.get('/active-order', requireAuth, requireApprovedPartner, activeOrder);
 router.get('/earnings', requireAuth, requireApprovedPartner, partnerEarnings);
+router.get('/ratings', requireAuth, requireApprovedPartner, partnerReviews);
 router.post('/active-order/start-pickup', requireAuth, requireApprovedPartner, startPartnerPickup);
 router.post(
   '/active-order/cannot-complete',

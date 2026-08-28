@@ -92,7 +92,7 @@ export default function OrdersPage() {
           <div>
             <p className="eyebrow">Your RouteBite requests</p>
             <h1>Food requests</h1>
-            <p className="form-intro">Follow each request from Razorpay Test Mode payment through delivery, cancellation, recovery and demo accounting.</p>
+            <p className="form-intro">Follow each request from Razorpay Test Mode payment through delivery, cancellation, recovery, demo accounting and partner rating.</p>
           </div>
           <div className="order-heading-actions">
             <Link className="secondary-link" to="/account">Account</Link>
@@ -119,6 +119,7 @@ export default function OrdersPage() {
             const hasDemoLedger = ['COMPLETED', 'MATCHING_FAILED', 'CANCELLED', 'ADMIN_REVIEW_REQUIRED'].includes(order.status);
             const canCancel = CANCELLABLE_STATUSES.has(order.status);
             const hasRecovery = order.recovery?.event && order.recovery.event !== 'NONE';
+            const canRate = order.status === 'COMPLETED';
 
             return (
               <article className="order-summary-card" key={order.id}>
@@ -142,6 +143,13 @@ export default function OrdersPage() {
                   <p className="partner-mode-note">
                     Recovery: {order.recovery.reason || order.recovery.event.replaceAll('_', ' ')}
                   </p>
+                ) : null}
+
+                {order.rating ? (
+                  <div className="order-rating-note">
+                    <span aria-hidden="true">★</span>
+                    <span>Your partner rating: {order.rating.score}/5</span>
+                  </div>
                 ) : null}
 
                 <div className="order-card-actions">
@@ -174,6 +182,11 @@ export default function OrdersPage() {
                   {hasDemoLedger ? (
                     <Link className="primary-link" to={`/orders/${order.id}/ledger`}>
                       {ledgerActionLabel(order.status)}
+                    </Link>
+                  ) : null}
+                  {canRate ? (
+                    <Link className="secondary-link" to={`/orders/${order.id}/rating`}>
+                      {order.rating ? 'View your rating' : 'Rate partner'}
                     </Link>
                   ) : null}
                 </div>
