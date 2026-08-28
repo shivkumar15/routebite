@@ -21,6 +21,7 @@ ALL
 ATTENTION
 ADMIN_REVIEW_REQUIRED
 MATCHING_FAILED
+FAILED
 ACTIVE
 COMPLETED
 CANCELLED
@@ -69,10 +70,17 @@ Price adjustment
 Receipt/proof link when present
 Recovery metadata
 Partner earning when present
+Canonical demo-ledger projection
 Operational timeline
 ```
 
+The demo-ledger section reuses the same deterministic accounting projection used by customer-facing Phase 11. This prevents the admin UI from inventing a second interpretation of refund, adjustment, settlement, or partner earning state.
+
 The operational timeline is a deterministic projection from persisted timestamps. It is not claimed to be a separate immutable audit-log collection.
+
+Matching-attempt timeline tones use the canonical matching status constants. `NO_CANDIDATES` and matching-engine `FAILED` attempts are treated as failure events, not successful matching events.
+
+Pending partner offers are shown with their expiry time. Resolved offers use their actual response timestamp, so the admin UI does not imply that an unresolved offer has already completed.
 
 ## Privacy and safety boundary
 
@@ -102,16 +110,20 @@ The admin account page links to both order operations and partner verification.
 1. Sign in with the ADMIN account.
 2. Open `Account -> Open order operations`.
 3. Confirm the default `Needs attention` queue contains existing failed/review orders.
-4. Switch filters and confirm counts/list change without a page reload.
+4. Switch filters, including `Failed`, and confirm counts/list change without a page reload.
 5. Open a known `MATCHING_FAILED` order.
 6. Confirm matching attempts show discovered/eligible/offer-ready counts and rejection reasons.
 7. For an order that dispatched an offer, confirm offer history shows the partner short ID and final offer status.
-8. For a paid order, confirm Razorpay Test payment state and amount appear.
-9. For a recovery order, confirm recovery reason and operational timeline are visible.
-10. Confirm a non-admin/anonymous request cannot access `/api/v1/admin/orders`.
+8. For a pending offer, confirm the table says when it expires instead of presenting the expiry timestamp as a completed response.
+9. For a paid failed/cancelled order, confirm the canonical demo refund/adjustment/settlement representation appears.
+10. For an `ADMIN_REVIEW_REQUIRED` order, confirm the demo ledger remains review-pending instead of fabricating a refund or settlement outcome.
+11. For a recovery order, confirm recovery reason and operational timeline are visible.
+12. Confirm a non-admin/anonymous request cannot access `/api/v1/admin/orders`.
 
 ## Resolution actions
 
 Do not add a generic `Force status` control.
 
-A future admin resolution action must be implemented as a named service-layer decision, for example a policy-approved post-purchase cancellation or completion repair, with explicit accounting and partner-state consequences.
+No post-purchase manual resolution is implemented until the product policy defines who absorbs the food cost, whether the customer receives a full/partial demo refund, and whether the failed partner receives any reimbursement. Guessing those consequences would create inconsistent accounting.
+
+A future admin resolution action must therefore be implemented as a named service-layer decision, for example a policy-approved post-purchase cancellation or completion repair, with explicit accounting and partner-state consequences.
