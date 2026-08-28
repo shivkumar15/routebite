@@ -3,7 +3,18 @@ import { ORDER_STATUS } from '../constants/order.constants.js';
 import { Order } from '../models/order.model.js';
 import { Partner } from '../models/partner.model.js';
 import { Rating } from '../models/rating.model.js';
+import { User } from '../models/user.model.js';
 import { AppError } from '../utils/app-error.js';
+
+function shortId(value) {
+  return value?.toString().slice(-6).toUpperCase() ?? null;
+}
+
+function firstName(value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return 'Customer';
+  return normalized.split(/\s+/)[0];
+}
 
 function toSafeRating(rating) {
   if (!rating) return null;
@@ -17,12 +28,27 @@ function toSafeRating(rating) {
   };
 }
 
-function toPartnerRatingSummary(partner) {
+function toPartnerRatingSummary(partner, user = null) {
   if (!partner) return null;
   return {
     partnerId: partner._id.toString(),
+    partnerShortId: shortId(partner._id),
+    name: user?.name ?? null,
     ratingAverage: Number(partner.ratingAverage ?? 0),
     ratingCount: Number(partner.ratingCount ?? 0),
+  };
+}
+
+function toRatingOrderSummary(order) {
+  if (!order) return null;
+  return {
+    id: order._id.toString(),
+    shortId: shortId(order._id),
+    vendorDisplayName: order.vendorDisplayName,
+    requestedItems: order.requestedItems,
+    pickupText: order.pickupText,
+    dropText: order.dropText,
+    completedAt: order.completedAt,
   };
 }
 
@@ -40,7 +66,7 @@ export function ratingAverageAfter({ currentAverage, currentCount, score }) {
 
 async function getRateableOrder({ customerId, orderId, session = null }) {
   const query = Order.findOne({ _id: orderId, customerId }).select(
-    '_id customerId status assignedPartnerId completedAt',
+    '_id customerId status assignedPartnerId vendorDisplayName requestedItems pickupText dropText completedAt',
   );
   if (session) query.session(session);
   const order = await query;
@@ -69,19 +95,31 @@ async function getRateableOrder({ customerId, orderId, session = null }) {
   return order;
 }
 
+async function getPartnerWithUser(partnerId) {
+  const partner = await Partner.findById(partnerId)
+    .select('_id userId ratingAverage ratingCount')
+    .lean();
+  if (!partner) return { partner: null, user: null };
+
+  const user = partner.userId
+    ? await User.findById(partner.userId).select('_id name').lean()
+    : null;
+
+  return { partner, user };
+}
+
 export async function getCustomerOrderRating({ customerId, orderId }) {
   const order = await getRateableOrder({ customerId, orderId });
-  const [rating, partner] = await Promise.all([
+  const [rating, partnerIdentity] = await Promise.all([
     Rating.findOne({ orderId: order._id, customerId }).lean(),
-    Partner.findById(order.assignedPartnerId)
-      .select('_id ratingAverage ratingCount')
-      .lean(),
+    getPartnerWithUser(order.assignedPartnerId),
   ]);
 
   return {
     canRate: !rating,
     rating: toSafeRating(rating),
-    partner: toPartnerRatingSummary(partner),
+    order: toRatingOrderSummary(order),
+    partner: toPartnerRatingSummary(partnerIdentity.partner, partnerIdentity.user),
   };
 }
 
@@ -89,10 +127,12 @@ export async function submitCustomerRating({ customerId, orderId, score, feedbac
   const session = await mongoose.startSession();
   let createdRating = null;
   let partnerId = null;
+  let ratedOrder = null;
 
   try {
     await session.withTransaction(async () => {
       const order = await getRateableOrder({ customerId, orderId, session });
+      ratedOrder = order;
       partnerId = order.assignedPartnerId;
 
       const existing = await Rating.findOne({
@@ -176,12 +216,81 @@ export async function submitCustomerRating({ customerId, orderId, score, feedbac
     await session.endSession();
   }
 
+  const partnerIdentity = await getPartnerWithUser(partnerId);
+
+  return {
+    rating: toSafeRating(createdRating),
+    order: toRatingOrderSummary(ratedOrder),
+    partner: toPartnerRatingSummary(partnerIdentity.partner, partnerIdentity.user),
+  };
+}
+
+export async function getPartnerReceivedRatings(partnerId) {
   const partner = await Partner.findById(partnerId)
     .select('_id ratingAverage ratingCount')
     .lean();
 
+  if (!partner) {
+    throw new AppError('Partner profile not found.', {
+      statusCode: 404,
+      code: 'PARTNER_PROFILE_NOT_FOUND',
+    });
+  }
+
+  const ratings = await Rating.find({ partnerId: partner._id })
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .lean();
+
+  const orderIds = ratings.map((rating) => rating.orderId);
+  const customerIds = ratings.map((rating) => rating.customerId);
+
+  const [orders, customers] = await Promise.all([
+    Order.find({ _id: { $in: orderIds } })
+      .select('_id vendorDisplayName pickupText dropText completedAt')
+      .lean(),
+    User.find({ _id: { $in: customerIds } })
+      .select('_id name')
+      .lean(),
+  ]);
+
+  const orderById = new Map(orders.map((order) => [order._id.toString(), order]));
+  const customerById = new Map(customers.map((user) => [user._id.toString(), user]));
+
   return {
-    rating: toSafeRating(createdRating),
-    partner: toPartnerRatingSummary(partner),
+    summary: toPartnerRatingSummary(partner),
+    privacy: {
+      customerIdentity: 'FIRST_NAME_ONLY',
+      note: 'Customer email, phone and full account identity are not exposed in partner reviews.',
+    },
+    reviews: ratings.map((rating) => {
+      const order = orderById.get(rating.orderId.toString());
+      const customer = customerById.get(rating.customerId.toString());
+
+      return {
+        id: rating._id.toString(),
+        score: rating.score,
+        feedback: rating.feedback ?? '',
+        createdAt: rating.createdAt,
+        customerDisplayName: firstName(customer?.name),
+        order: order
+          ? {
+              id: order._id.toString(),
+              shortId: shortId(order._id),
+              vendorDisplayName: order.vendorDisplayName,
+              pickupText: order.pickupText,
+              dropText: order.dropText,
+              completedAt: order.completedAt,
+            }
+          : {
+              id: rating.orderId.toString(),
+              shortId: shortId(rating.orderId),
+              vendorDisplayName: 'Completed delivery',
+              pickupText: null,
+              dropText: null,
+              completedAt: null,
+            },
+      };
+    }),
   };
 }
