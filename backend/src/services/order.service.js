@@ -1,8 +1,9 @@
 import { DELIVERY_OPERATION_LIMITS } from '../constants/delivery.constants.js';
 import { DELIVERY_TYPE, MAX_ASAP_DELIVERY_MINUTES, ORDER_STATUS } from '../constants/order.constants.js';
 import { Order } from '../models/order.model.js';
-import { calculateCheckoutPricing } from './pricing.service.js';
+import { Rating } from '../models/rating.model.js';
 import { AppError } from '../utils/app-error.js';
+import { calculateCheckoutPricing } from './pricing.service.js';
 
 function pointFromInput(location) {
   return {
@@ -90,7 +91,17 @@ function safeRecovery(order) {
   };
 }
 
-function toSafeOrder(order) {
+function safeRating(rating) {
+  if (!rating) return null;
+  return {
+    id: rating._id.toString(),
+    score: rating.score,
+    feedback: rating.feedback ?? '',
+    createdAt: rating.createdAt,
+  };
+}
+
+function toSafeOrder(order, rating = null) {
   return {
     id: order._id.toString(),
     status: order.status,
@@ -115,6 +126,7 @@ function toSafeOrder(order) {
     priceAdjustment: safePriceAdjustment(order),
     deliveryOtp: safeDeliveryOtp(order),
     recovery: safeRecovery(order),
+    rating: safeRating(rating),
     pickupStartedAt: order.pickupStartedAt ?? null,
     pickedUpAt: order.pickedUpAt ?? null,
     deliveryStartedAt: order.deliveryStartedAt ?? null,
@@ -157,7 +169,17 @@ export async function createDraftOrder({ customerId, payload }) {
 
 export async function listCustomerOrders(customerId) {
   const orders = await Order.find({ customerId }).sort({ createdAt: -1 });
-  return orders.map(toSafeOrder);
+  const ratings = orders.length
+    ? await Rating.find({
+        customerId,
+        orderId: { $in: orders.map((order) => order._id) },
+      }).lean()
+    : [];
+  const ratingByOrderId = new Map(
+    ratings.map((rating) => [rating.orderId.toString(), rating]),
+  );
+
+  return orders.map((order) => toSafeOrder(order, ratingByOrderId.get(order._id.toString())));
 }
 
 export async function getCustomerOrder({ customerId, orderId }) {
@@ -170,7 +192,8 @@ export async function getCustomerOrder({ customerId, orderId }) {
     });
   }
 
-  return toSafeOrder(order);
+  const rating = await Rating.findOne({ orderId: order._id, customerId }).lean();
+  return toSafeOrder(order, rating);
 }
 
 export async function updateDraftOrder({ customerId, orderId, payload }) {
