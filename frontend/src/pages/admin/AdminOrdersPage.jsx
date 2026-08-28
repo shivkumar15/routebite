@@ -7,6 +7,7 @@ const FILTERS = [
   ['ATTENTION', 'Needs attention'],
   ['ADMIN_REVIEW_REQUIRED', 'Admin review'],
   ['MATCHING_FAILED', 'Matching failed'],
+  ['FAILED', 'Failed'],
   ['ACTIVE', 'Active'],
   ['COMPLETED', 'Completed'],
   ['CANCELLED', 'Cancelled'],
