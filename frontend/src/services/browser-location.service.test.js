@@ -37,4 +37,15 @@ describe('browser location service', () => {
       message: expect.stringContaining('Allow location access'),
     });
   });
+
+  it('returns an actionable timeout error', async () => {
+    setGeolocation({
+      getCurrentPosition: vi.fn((_success, failure) => failure({ code: 3 })),
+    });
+
+    await expect(getBrowserLocation()).rejects.toMatchObject({
+      code: 'TIMEOUT',
+      message: expect.stringContaining('took too long'),
+    });
+  });
 });

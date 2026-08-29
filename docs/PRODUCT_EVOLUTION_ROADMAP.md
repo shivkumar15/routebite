@@ -70,7 +70,7 @@ Use **Google Maps Platform behind a RouteBite provider adapter** for the first j
 
 This matches the existing architecture and product documentation, provides place search and reliable maps/routes in one ecosystem, and minimizes integration risk before judging. The adapter prevents the UI and business services from becoming permanently coupled to one provider.
 
-This recommendation needs joint approval before Phase 16 implementation because Google Cloud billing, quotas and API keys require owner involvement.
+This recommendation was jointly approved on 29 August 2026. The provider-isolated code and automated regression checkpoint are complete; the restricted Google Cloud browser key and live rehearsal now require owner involvement.
 
 ### User experience
 
@@ -464,14 +464,14 @@ If code and documentation disagree, the discrepancy is a defect. The canonical o
 
 ---
 
-## 8. First Action After Joint Approval
+## 8. Immediate Next Action
 
-Create/continue branch:
+Phase 16 implementation is active on:
 
 ```text
 phase-16-location-experience
 ```
 
-Then implement Phase 16 in small commits, beginning with the provider boundary, environment validation and reusable location model/component tests before replacing existing coordinate controls.
+The provider boundary, reusable picker, customer/partner integrations, frontend tests, production build and GitHub Actions checkpoint are complete at `bf1d4f68f717d06c52dd77fd2b462de75d63b1f6`.
 
-The old controls stay available behind a development fallback until search, current location and pin selection all pass. This gives RouteBite a safe rollback path while the map experience is being introduced.
+The immediate next action is the product owner's restricted Google Maps browser-key setup followed by the live desktop/phone checklist in [`PHASE_16_GOOGLE_MAPS_SETUP.md`](./PHASE_16_GOOGLE_MAPS_SETUP.md). Raw coordinates remain available only behind the explicit development fallback until search, current location and pin selection all pass.

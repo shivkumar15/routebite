@@ -1,6 +1,6 @@
 # Phase 16 — Location Experience Foundation
 
-> **Status:** CONFIRMED — implementation active
+> **Status:** IMPLEMENTED — live Google Maps/browser rehearsal pending
 >
 > **Branch:** `phase-16-location-experience`
 >
@@ -24,6 +24,29 @@ Fallback: development-only raw coordinates until map rehearsal passes
 ```
 
 Approved by the product owner on 29 August 2026. The product owner never sends API keys through chat or commits them. They are placed only in local/deployment environment configuration.
+
+## Implementation checkpoint — 29 August 2026
+
+The provider-isolated implementation is on `phase-16-location-experience` at `bf1d4f68f717d06c52dd77fd2b462de75d63b1f6`.
+
+Completed at this checkpoint:
+
+- Google Maps loader/provider adapter using the current Places autocomplete element, Advanced Markers and reverse geocoding;
+- one reusable controlled `LocationPicker` for customer pickup/drop and partner trip origin/destination;
+- search, current-device location, click/drag pin and editable human-readable label paths;
+- permission, provider-load and reverse-geocode recovery states;
+- normal product UI hides coordinates; development-only fallback remains available by environment flag;
+- existing order/trip request payloads and GeoJSON ordering remain unchanged;
+- frontend Vitest/Testing Library coverage added to GitHub Actions;
+- backend: 23 suites / 108 tests passed;
+- frontend: 3 test files / 12 tests passed;
+- frontend production build passed;
+- npm high-severity audit reported 0 vulnerabilities;
+- GitHub Actions RouteBite checks run #393 passed.
+
+No order state, payment, matching, assignment, OTP, earning or database-schema code changed.
+
+The next required checkpoint is the owner-configured restricted browser key and live rehearsal. Follow [`PHASE_16_GOOGLE_MAPS_SETUP.md`](./PHASE_16_GOOGLE_MAPS_SETUP.md). Pull request #17 remains draft until the live checklist passes.
 
 ## Problem being solved
 
@@ -196,6 +219,8 @@ Expected public browser configuration:
 
 ```env
 VITE_GOOGLE_MAPS_BROWSER_KEY=
+VITE_GOOGLE_MAPS_MAP_ID=
+VITE_ENABLE_COORDINATE_FALLBACK=false
 ```
 
 Keep the current server configuration name to avoid an unnecessary deployment migration:
@@ -205,6 +230,8 @@ GOOGLE_MAPS_API_KEY=
 ```
 
 The implementation must update both `.env.example` files and startup/provider error messages. Browser configuration is public by nature but the key must be referrer/API restricted. Server credentials never enter the frontend bundle.
+
+The browser key needs Maps JavaScript API, Places API (New) and Geocoding API. The browser and server keys remain separate. Exact account, referrer, quota and rehearsal instructions are maintained in [`PHASE_16_GOOGLE_MAPS_SETUP.md`](./PHASE_16_GOOGLE_MAPS_SETUP.md).
 
 ## Cost and abuse controls
 
@@ -304,6 +331,8 @@ The existing backend state/matching tests must remain green. Add frontend test t
 
 Use at least one desktop browser and one phone on the same safe test environment.
 
+Browser geolocation requires a secure context. Same-Wi-Fi HTTP can rehearse search and pin behavior, but phone current-location testing requires HTTPS; laptop `localhost` remains suitable for the first geolocation pass. See the setup runbook for the exact boundary.
+
 Customer:
 
 1. Search and select a known vendor/landmark.
@@ -341,16 +370,16 @@ Phase 16 keeps the current API and database representation. If provider integrat
 ## Exit criteria
 
 ```text
-[ ] decisions approved and recorded
-[ ] provider adapter does not leak Google objects into page/business code
+[x] decisions approved and recorded
+[x] provider adapter does not leak Google objects into page/business code
 [ ] customer pickup/drop works without coordinate knowledge
 [ ] partner trip origin/destination works without coordinate knowledge
 [ ] unlisted vendor pin works
-[ ] permission/provider failures have explicit recovery
-[ ] existing API and GeoJSON contract unchanged
-[ ] backend suite green
-[ ] frontend production build green
-[ ] GitHub Actions green
+[x] permission/provider failures have explicit recovery
+[x] existing API and GeoJSON contract unchanged
+[x] backend suite green
+[x] frontend production build green
+[x] GitHub Actions green
 [ ] real-device customer and partner rehearsal passes
 [ ] one ASAP matching flow passes
 [ ] one scheduled/on-my-way flow passes
