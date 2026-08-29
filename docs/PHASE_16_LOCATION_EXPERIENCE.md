@@ -198,10 +198,10 @@ Expected public browser configuration:
 VITE_GOOGLE_MAPS_BROWSER_KEY=
 ```
 
-Expected server configuration remains documented and must be normalized during implementation if current names differ:
+Keep the current server configuration name to avoid an unnecessary deployment migration:
 
 ```env
-GOOGLE_MAPS_SERVER_API_KEY=
+GOOGLE_MAPS_API_KEY=
 ```
 
 The implementation must update both `.env.example` files and startup/provider error messages. Browser configuration is public by nature but the key must be referrer/API restricted. Server credentials never enter the frontend bundle.
@@ -291,7 +291,7 @@ Required regression:
 ```powershell
 cd backend
 npm ci
-npm test -- --runInBand
+npm test
 
 cd ..\frontend
 npm ci
