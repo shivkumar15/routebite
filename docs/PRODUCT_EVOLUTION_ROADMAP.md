@@ -1,6 +1,6 @@
 # RouteBite — Product Evolution Roadmap
 
-> **Status:** ACTIVE DRAFT — joint product approval required before Phase 16 implementation
+> **Status:** CONFIRMED — Phase 16 implementation active
 >
 > **Stable baseline:** `main` at `c16c338e5246b5c0ac5529b299d4cbeef31aa277`
 >
@@ -411,15 +411,15 @@ No large product decision should be hidden inside a code commit.
 
 | Decision | CTO recommendation | Status |
 | --- | --- | --- |
-| Initial map/search provider | Google Maps behind an adapter | Awaiting joint approval |
-| Normal location input | Search + current location + draggable pin; hide coordinates | Awaiting joint approval |
-| Brand direction | Keep coral/burgundy/cream and route motif | Awaiting joint approval |
-| Utility UI density | Compact type/cards; large display type only for true hero content | Awaiting joint approval |
-| Product terminology | Remove repetitive prototype/demo UI labels | Awaiting joint approval |
-| Financial disclosure | One reusable Test environment notice; never imply real settlement | Awaiting joint approval |
-| Delivery order | Phase 16 location first, then tracking, language and UI system | Awaiting joint approval |
+| Initial map/search provider | Google Maps behind an adapter | Confirmed 29 August 2026 |
+| Normal location input | Search + current location + draggable pin; hide coordinates | Confirmed 29 August 2026 |
+| Brand direction | Keep coral/burgundy/cream and route motif | Confirmed 29 August 2026 |
+| Utility UI density | Compact type/cards; large display type only for true hero content | Confirmed 29 August 2026 |
+| Product terminology | Remove repetitive prototype/demo UI labels | Confirmed 29 August 2026 |
+| Financial disclosure | One reusable Test environment notice; never imply real settlement | Confirmed 29 August 2026 |
+| Delivery order | Phase 16 location first, then tracking, language and UI system | Confirmed 29 August 2026 |
 
-Once approved, record the decisions in `DECISIONS.md` and change this roadmap status from active draft to confirmed.
+The approved decisions are recorded in `DECISIONS.md`. A later change must supersede the relevant ADR rather than silently changing implementation.
 
 ---
 
