@@ -1,10 +1,10 @@
 # RouteBite — Progress Report
 
 > **Last updated:** 29 August 2026
-> **Current branch:** `phase-15-full-rehearsal-hardening`
-> **Prototype status:** Phase 0–14 merged. Phase 15 engineering and rehearsal complete; awaiting PR review and merge.
+> **Stable branch:** `main`
+> **Project status:** Phase 0–15 complete and merged. Post-MVP product evolution is planned in `PRODUCT_EVOLUTION_ROADMAP.md`; Phase 16 awaits joint product approval.
 
-This document is the current source of truth for what has been completed, how each milestone was validated, and what remains before the RouteBite prototype can be considered finished.
+This document records what has been completed and how each milestone was validated. `PRODUCT_EVOLUTION_ROADMAP.md` is the current source of truth for the next product phases, decision checkpoints and non-regression gates.
 
 ---
 
@@ -620,10 +620,16 @@ Phase 14 merge commit:
 Phase 15 proved the complete development prototype and its critical race/recovery invariants
 without manual MongoDB editing.
 
-Current branch:
+Completed branch:
 
 ```text
 phase-15-full-rehearsal-hardening
+```
+
+Merged through PR #16. Stable merge commit:
+
+```text
+c16c338e5246b5c0ac5529b299d4cbeef31aa277
 ```
 
 ## Final evidence
@@ -694,22 +700,30 @@ Node's experimental VM-modules notice remains a Jest runtime notice, not a Mongo
 
 # 6. What Is Left
 
-No Phase 15 engineering or rehearsal blocker remains.
+No Phase 15 engineering, rehearsal or merge blocker remains. The original working-MVP milestone
+is complete.
 
-The only remaining prototype milestone steps are:
+The next work is deliberately separated into product-evolution phases:
 
 ```text
-open Phase 15 pull request
-→ verify PR-triggered GitHub Actions
-→ review
-→ merge to main
+Phase 16  Location selection foundation
+Phase 17  Map-aware tracking and route clarity
+Phase 18  Product language and trust
+Phase 19  Compact design foundation
+Phase 20  Customer journey redesign
+Phase 21  Partner journey redesign
+Phase 22  Admin and operations redesign
+Phase 23  Pilot readiness
+Phase 24  Judge release rehearsal and hardening
 ```
 
-A successful merge means the planned RouteBite **development prototype** is complete. It does
-not mean RouteBite is ready for public production use. Major post-prototype work still includes
-live-payment settlement/refunds, production deployment and monitoring, security review,
-load/failure testing, backup/restore drills, legal and food-handling policy, partner KYC and
-real operational support.
+See `PRODUCT_EVOLUTION_ROADMAP.md` for scope, order, ownership, decision checkpoints and exit
+criteria. Phase 16 does not begin implementation until the initial map provider and experience
+decisions are jointly approved.
+
+Public-production gaps remain explicit: live marketplace settlement/refunds, production
+deployment and monitoring, security review, load/failure testing, backup/restore drills, legal
+and food-handling policy, partner KYC and real operational support.
 
 ---
 
@@ -780,14 +794,15 @@ Phase 15  Full rehearsal / hardening       ✅
 
 Approximate project state:
 
-> **The planned development-prototype implementation and Phase 15 verification are complete. Pull-request review, green PR checks and merge remain; production readiness is a separate milestone.**
+> **The working MVP and Phase 15 verification are complete and merged. RouteBite is entering controlled product evolution; it is not yet approved for an uncontrolled public-production launch.**
 
 ---
 
 # 9. Rule for Future Work
 
-Until Phase 15 is merged:
+Future work is governed by `PRODUCT_EVOLUTION_ROADMAP.md`:
 
-> Do not call the prototype finished merely because a UI screen works. Any discovered failure that requires manually changing MongoDB records must be treated as a bug and fixed through the normal service/API flow.
+> Preserve `c16c338e5246b5c0ac5529b299d4cbeef31aa277` as the known-good behavioral baseline. Build one focused phase per branch/PR, keep MongoDB and REST authoritative, and treat any flow that requires manual database repair as a blocker bug.
 
-After Phase 15 passes and merges, future work should be treated as post-prototype product evolution rather than part of the original prototype milestone.
+Product-facing language should present RouteBite as a working project/MVP without making false
+claims about test-only payments, simulated settlement or public-production readiness.
