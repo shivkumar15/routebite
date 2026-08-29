@@ -161,6 +161,18 @@ hardening:completion-idempotency PASS · one completion / one earning
 
 These results prove the tested development state at rehearsal time; the scripts remain repeatable and should be rerun before final merge if later hardening changes touch the relevant flows.
 
+### Browser rehearsal finding: Available Now location heartbeat
+
+The first final browser rehearsal proved request creation, Razorpay Test Mode confirmation,
+matching, offer delivery and the expected `MATCHING_FAILED` outcome after the offer was left
+unaccepted. It also exposed that the partner dashboard saved location only when entering
+`AVAILABLE_NOW`, despite the documented foreground heartbeat behavior.
+
+The dashboard now refreshes browser location every 15 seconds while the partner remains
+`AVAILABLE_NOW`, stops the timer after going offline or receiving an active order, and shows a
+visible warning if a refresh fails. Browser verification must confirm that the displayed update
+time advances before the full happy-path rehearsal continues.
+
 ### CI protection
 
 GitHub Actions runs:
