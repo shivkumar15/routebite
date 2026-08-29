@@ -152,7 +152,7 @@ Fixtures are removed afterward.
 The following Phase 15 development-database rehearsals have been run successfully on the current branch:
 
 ```text
-hardening:audit                  PASS · 0 errors / 0 warnings
+hardening:audit                  PASS · latest 18 orders · 0 errors / 0 warnings
 hardening:accept-race            PASS · exactly one winner
 hardening:restart-offer          PASS · persisted offer recovered after restart/expiry
 hardening:webhook-idempotency    PASS · duplicate event deduplicated
@@ -189,15 +189,31 @@ The checkout now also refreshes canonical tracking state from REST every 30 seco
 delivery tracking is active. Socket.IO remains the fast path, while this bounded fallback recovers
 a missed location or terminal-state notification without requiring a manual browser refresh.
 
+A separate complete **Scheduled / On My Way** rehearsal also passed. The partner stayed
+operationally `OFFLINE` for Available Now work but had a compatible planned route, received the
+scheduled offer, accepted it and completed the full pickup → delivery → OTP → completion flow.
+The actual food amount decreased from ₹200 to ₹180, so RouteBite applied the expected
+`AUTO_DECREASED` adjustment and notified the customer without requiring approval. Admin
+Operations showed the scheduled order, `TRIP_SCHEDULED` matching candidate, accepted offer,
+₹20 demo adjustment/refund projection, one partner earning and a coherent lifecycle timeline.
+
+After both browser paths and all four destructive-isolated rehearsal scripts were rerun, the final
+read-only audit inspected the latest 18 development orders and reported **0 errors and 0 warnings**.
+
 ### CI protection
 
 GitHub Actions runs:
 
 ```text
+npm ci from committed backend/frontend lockfiles
 hardening script syntax check
-backend Jest suite
+backend Jest suite · 23 suites / 108 tests
 frontend production build
 ```
+
+The lockfiles are committed and CI uses `npm ci`, so dependency installation is reproducible.
+The backend lockfile was regenerated portably after the Windows-created lock omitted Linux
+optional peer packages required by the Ubuntu runner. The corrected clean-install run is green.
 
 The dev-database rehearsal commands are intentionally not executed in CI because CI has no Atlas development replica-set fixture environment.
 
@@ -300,19 +316,27 @@ A separate final rehearsal must also prove a compatible **Scheduled / On My Way*
 Phase 15 can merge only when:
 
 ```text
-[ ] backend Jest suite green
-[ ] frontend production build green
-[ ] hardening syntax checks green
-[ ] invariant audit has no unexplained ERROR
-[ ] accept-race rehearsal passes
-[ ] restart-offer rehearsal passes
-[ ] webhook-idempotency rehearsal passes
-[ ] completion-idempotency rehearsal passes
-[ ] AVAILABLE_NOW full happy path passes
-[ ] Scheduled / On My Way happy path passes
-[ ] core failure/recovery paths remain explicit
-[ ] refresh/reconnect rehearsal recovers from REST
-[ ] no tested flow requires manual MongoDB editing
-[ ] intentional ADMIN_REVIEW_REQUIRED cases are visible in Admin Operations
-[ ] final demo checklist is repeatable
+[x] backend Jest suite green
+[x] frontend production build green
+[x] hardening syntax checks green
+[x] invariant audit has no unexplained ERROR
+[x] accept-race rehearsal passes
+[x] restart-offer rehearsal passes
+[x] webhook-idempotency rehearsal passes
+[x] completion-idempotency rehearsal passes
+[x] AVAILABLE_NOW full happy path passes
+[x] Scheduled / On My Way happy path passes
+[x] core failure/recovery paths remain explicit
+[x] refresh/reconnect rehearsal recovers from REST
+[x] no tested flow requires manual MongoDB editing
+[x] intentional ADMIN_REVIEW_REQUIRED cases are visible in Admin Operations
+[x] final demo checklist is repeatable
 ```
+
+**Phase 15 verdict — PASS (29 August 2026).** All prototype exit criteria were satisfied on the
+development environment without manual MongoDB editing. The branch is ready for pull-request
+review and merge.
+
+This verdict does **not** claim production readiness. Live-payment settlement/refunds, production
+deployment and observability, security review, load/chaos testing, backup/restore drills, partner
+KYC/liability policy and real operational support remain post-prototype work.
