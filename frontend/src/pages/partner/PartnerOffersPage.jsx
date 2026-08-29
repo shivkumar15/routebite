@@ -59,12 +59,24 @@ export default function PartnerOffersPage() {
       loadOffers({ quiet: true });
     };
     const handleOfferChange = () => loadOffers({ quiet: true });
+    const handleReconnect = () => loadOffers({ quiet: true });
+    const handleWindowFocus = () => loadOffers({ quiet: true });
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') loadOffers({ quiet: true });
+    };
 
     socket.connect();
     socket.on('offer:new', handleOfferNew);
     socket.on('offer:expired', handleOfferChange);
     socket.on('offer:cancelled', handleOfferChange);
     socket.on('offer:accepted', handleOfferChange);
+    // The server may resume/create durable offers during a restart before this
+    // browser reconnects. REST is authoritative, so always resync after the
+    // authenticated socket connection is re-established.
+    socket.on('system:connected', handleReconnect);
+    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('online', handleReconnect);
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       window.clearInterval(clock);
@@ -72,6 +84,10 @@ export default function PartnerOffersPage() {
       socket.off('offer:expired', handleOfferChange);
       socket.off('offer:cancelled', handleOfferChange);
       socket.off('offer:accepted', handleOfferChange);
+      socket.off('system:connected', handleReconnect);
+      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('online', handleReconnect);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 

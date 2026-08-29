@@ -36,14 +36,14 @@ function validOrder(overrides = {}) {
 }
 
 describe('Phase 8 pickup and price adjustment persistence', () => {
-  test('new order defaults to no price adjustment', () => {
+  test('new order defaults to no price adjustment', async () => {
     const order = validOrder();
     expect(order.priceAdjustment.status).toBe(PRICE_ADJUSTMENT_STATUS.NONE);
     expect(order.priceAdjustment.actualFoodCostPaise).toBeUndefined();
-    expect(order.validateSync()).toBeUndefined();
+    await expect(order.validate()).resolves.toBeUndefined();
   });
 
-  test('actual and final money reject fractional paise', () => {
+  test('actual and final money reject fractional paise', async () => {
     const order = validOrder({
       pricing: {
         estimatedFoodCostPaise: 20000,
@@ -60,12 +60,12 @@ describe('Phase 8 pickup and price adjustment persistence', () => {
       },
     });
 
-    const error = order.validateSync();
+    const error = await order.validate().catch((validationError) => validationError);
     expect(error.errors['pricing.finalCustomerTotalPaise']).toBeDefined();
     expect(error.errors['priceAdjustment.actualFoodCostPaise']).toBeDefined();
   });
 
-  test('price difference may be a signed integer for lower vendor prices', () => {
+  test('price difference may be a signed integer for lower vendor prices', async () => {
     const order = validOrder({
       priceAdjustment: {
         status: PRICE_ADJUSTMENT_STATUS.AUTO_DECREASED,
@@ -76,7 +76,7 @@ describe('Phase 8 pickup and price adjustment persistence', () => {
       },
     });
 
-    expect(order.validateSync()).toBeUndefined();
+    await expect(order.validate()).resolves.toBeUndefined();
     expect(order.priceAdjustment.differencePaise).toBe(-2000);
   });
 

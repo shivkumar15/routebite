@@ -63,6 +63,7 @@ export default function PartnerDashboardPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [trackingIssue, setTrackingIssue] = useState('');
+  const [availabilityLocationIssue, setAvailabilityLocationIssue] = useState('');
 
   const activeTrip = useMemo(
     () => trips.find((trip) => trip.status === 'TRIP_ACTIVE') ?? null,
@@ -93,6 +94,39 @@ export default function PartnerDashboardPage() {
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  useEffect(() => {
+    if (operational?.availabilityStatus !== 'AVAILABLE_NOW' || activeOrder) {
+      setAvailabilityLocationIssue('');
+      return undefined;
+    }
+
+    let active = true;
+
+    async function pushAvailableLocation() {
+      try {
+        const location = await getBrowserLocation({ maximumAge: 3000 });
+        const { data } = await api.put('/partner/location', location);
+        if (!active) return;
+        setOperational(data.data.partner);
+        setAvailabilityLocationIssue('');
+      } catch (locationError) {
+        if (!active) return;
+        setAvailabilityLocationIssue(
+          locationError.response?.data?.error?.message ??
+            locationError.message ??
+            'Available Now location could not be refreshed.',
+        );
+      }
+    }
+
+    const timer = window.setInterval(pushAvailableLocation, 15000);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [operational?.availabilityStatus, activeOrder?.id]);
 
   useEffect(() => {
     if (activeOrder?.status !== 'OUT_FOR_DELIVERY') {
@@ -315,6 +349,11 @@ export default function PartnerDashboardPage() {
 
       {message ? <p className="success-message partner-flash">{message}</p> : null}
       {error ? <p className="form-error partner-flash">{error}</p> : null}
+      {availabilityLocationIssue ? (
+        <p className="form-error partner-flash">
+          Available Now location: {availabilityLocationIssue}
+        </p>
+      ) : null}
       {trackingIssue ? <p className="form-error partner-flash">Tracking: {trackingIssue}</p> : null}
 
       <ActiveDeliveryCard order={activeOrder} onOrderChange={setActiveOrder} />

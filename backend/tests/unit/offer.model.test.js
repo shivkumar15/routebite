@@ -25,15 +25,15 @@ describe('Phase 7 offer persistence rules', () => {
     });
   }
 
-  test('new delivery offer defaults to PENDING', () => {
+  test('new delivery offer defaults to PENDING', async () => {
     const offer = validOffer();
     expect(offer.status).toBe(OFFER_STATUS.PENDING);
-    expect(offer.validateSync()).toBeUndefined();
+    await expect(offer.validate()).resolves.toBeUndefined();
   });
 
-  test('offer earning must be integer paise', () => {
+  test('offer earning must be integer paise', async () => {
     const offer = validOffer({ expectedEarningPaise: 4000.5 });
-    const error = offer.validateSync();
+    const error = await offer.validate().catch((validationError) => validationError);
     expect(error.errors.expectedEarningPaise).toBeDefined();
   });
 

@@ -29,7 +29,7 @@ describe('Phase 14 ratings', () => {
     expect(orderIndex[1].unique).toBe(true);
   });
 
-  test('score must be an integer from 1 to 5 and feedback is capped', () => {
+  test('score must be an integer from 1 to 5 and feedback is capped', async () => {
     const invalid = new Rating({
       orderId: '507f1f77bcf86cd799439011',
       customerId: '507f1f77bcf86cd799439012',
@@ -38,7 +38,7 @@ describe('Phase 14 ratings', () => {
       feedback: 'x'.repeat(501),
     });
 
-    const error = invalid.validateSync();
+    const error = await invalid.validate().catch((validationError) => validationError);
     expect(error.errors.score).toBeDefined();
     expect(error.errors.feedback).toBeDefined();
   });
