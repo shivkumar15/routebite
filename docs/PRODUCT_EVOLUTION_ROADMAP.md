@@ -157,7 +157,7 @@ Run from the repository checkout:
 ```powershell
 cd backend
 npm ci
-npm test -- --runInBand
+npm test
 
 cd ..\frontend
 npm ci
