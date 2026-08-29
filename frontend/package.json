@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "vite",
     "dev:lan": "vite --host 0.0.0.0",
+    "test": "vitest run",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@googlemaps/js-api-loader": "^2.1.1",
     "axios": "latest",
     "react": "latest",
     "react-dom": "latest",
@@ -17,7 +19,11 @@
     "socket.io-client": "latest"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@vitejs/plugin-react": "latest",
-    "vite": "latest"
+    "jsdom": "^30.0.1",
+    "vite": "latest",
+    "vitest": "^4.1.11"
   }
 }

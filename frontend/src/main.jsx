@@ -8,6 +8,7 @@ import './styles/globals.css';
 import './styles/typography.css';
 import './styles/partner.css';
 import './styles/order.css';
+import './styles/location-picker.css';
 import './styles/matching.css';
 import './styles/offer.css';
 import './styles/active-delivery.css';

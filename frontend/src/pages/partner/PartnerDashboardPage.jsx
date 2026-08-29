@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios.js';
+import LocationPicker from '../../components/location/LocationPicker.jsx';
 import ActiveDeliveryCard from '../../components/partner/ActiveDeliveryCard.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { isCompleteLocation, locationToApiPayload } from '../../utils/location.js';
 
-const EMPTY_TRIP_FORM = {
-  originLabel: '',
-  originLatitude: '',
-  originLongitude: '',
-  destinationLabel: '',
-  destinationLatitude: '',
-  destinationLongitude: '',
-  scheduledDepartureAt: '',
-  departureFlexMinutes: '15',
-};
+function createEmptyTripForm() {
+  return {
+    origin: { label: '', latitude: '', longitude: '' },
+    destination: { label: '', latitude: '', longitude: '' },
+    scheduledDepartureAt: '',
+    departureFlexMinutes: '15',
+  };
+}
 
 function getBrowserLocation({ maximumAge = 15000 } = {}) {
   return new Promise((resolve, reject) => {
@@ -57,7 +57,7 @@ export default function PartnerDashboardPage() {
   const [operational, setOperational] = useState(null);
   const [activeOrder, setActiveOrder] = useState(null);
   const [trips, setTrips] = useState([]);
-  const [tripForm, setTripForm] = useState(EMPTY_TRIP_FORM);
+  const [tripForm, setTripForm] = useState(createEmptyTripForm);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
@@ -231,25 +231,6 @@ export default function PartnerDashboardPage() {
     }
   }
 
-  function useCurrentLocationForOrigin() {
-    setBusy('origin-location');
-    setError('');
-    setMessage('');
-
-    getBrowserLocation()
-      .then((location) => {
-        setTripForm((current) => ({
-          ...current,
-          originLatitude: String(location.latitude),
-          originLongitude: String(location.longitude),
-          originLabel: current.originLabel || 'My current location',
-        }));
-        setMessage('Current position copied into the trip origin.');
-      })
-      .catch((locationError) => setError(locationError.message))
-      .finally(() => setBusy(''));
-  }
-
   async function handleCreateTrip(event) {
     event.preventDefault();
     setBusy('create-trip');
@@ -257,24 +238,22 @@ export default function PartnerDashboardPage() {
     setMessage('');
 
     try {
+      if (!isCompleteLocation(tripForm.origin) || !isCompleteLocation(tripForm.destination)) {
+        setError('Select both trip origin and destination, including clear location names.');
+        setBusy('');
+        return;
+      }
+
       const payload = {
-        origin: {
-          label: tripForm.originLabel,
-          latitude: Number(tripForm.originLatitude),
-          longitude: Number(tripForm.originLongitude),
-        },
-        destination: {
-          label: tripForm.destinationLabel,
-          latitude: Number(tripForm.destinationLatitude),
-          longitude: Number(tripForm.destinationLongitude),
-        },
+        origin: locationToApiPayload(tripForm.origin),
+        destination: locationToApiPayload(tripForm.destination),
         scheduledDepartureAt: new Date(tripForm.scheduledDepartureAt).toISOString(),
         departureFlexMinutes: Number(tripForm.departureFlexMinutes),
       };
 
       const { data } = await api.post('/partner/trips', payload);
       setTrips((current) => [data.data.trip, ...current]);
-      setTripForm(EMPTY_TRIP_FORM);
+      setTripForm(createEmptyTripForm());
       setMessage('Trip scheduled. It is separate from Available Now supply.');
     } catch (requestError) {
       setError(
@@ -378,10 +357,7 @@ export default function PartnerDashboardPage() {
           <div className="partner-location-box">
             <span>Current location</span>
             {operational?.currentLocation ? (
-              <strong>
-                {operational.currentLocation.latitude.toFixed(5)}, {' '}
-                {operational.currentLocation.longitude.toFixed(5)}
-              </strong>
+              <strong>Location sharing active</strong>
             ) : (
               <strong>Not shared yet</strong>
             )}
@@ -456,14 +432,6 @@ export default function PartnerDashboardPage() {
             <p className="eyebrow">Plan your own journey</p>
             <h2>Schedule an On My Way route</h2>
           </div>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={useCurrentLocationForOrigin}
-            disabled={busy === 'origin-location' || handlingDelivery}
-          >
-            {busy === 'origin-location' ? 'Locating…' : 'Use my location as origin'}
-          </button>
         </div>
 
         {handlingDelivery ? (
@@ -471,43 +439,25 @@ export default function PartnerDashboardPage() {
         ) : null}
 
         <form className="trip-form" onSubmit={handleCreateTrip}>
-          <div className="trip-endpoint-panel">
-            <span className="trip-dot pickup-dot" />
-            <label>
-              Starting from
-              <input
-                value={tripForm.originLabel}
-                onChange={(event) => setTripForm({ ...tripForm, originLabel: event.target.value })}
-                placeholder="Civil Lines"
-                required
-                disabled={handlingDelivery}
-              />
-            </label>
-            <div className="coordinate-grid">
-              <label>Latitude<input type="number" step="any" min="-90" max="90" value={tripForm.originLatitude} onChange={(event) => setTripForm({ ...tripForm, originLatitude: event.target.value })} required disabled={handlingDelivery} /></label>
-              <label>Longitude<input type="number" step="any" min="-180" max="180" value={tripForm.originLongitude} onChange={(event) => setTripForm({ ...tripForm, originLongitude: event.target.value })} required disabled={handlingDelivery} /></label>
-            </div>
-          </div>
+          <LocationPicker
+            label="Starting from"
+            description="Choose where your planned journey begins."
+            purpose="trip origin"
+            value={tripForm.origin}
+            onChange={(origin) => setTripForm((current) => ({ ...current, origin }))}
+            disabled={handlingDelivery}
+          />
 
           <div className="trip-form-route-line" aria-hidden="true" />
 
-          <div className="trip-endpoint-panel">
-            <span className="trip-dot destination-dot" />
-            <label>
-              Heading to
-              <input
-                value={tripForm.destinationLabel}
-                onChange={(event) => setTripForm({ ...tripForm, destinationLabel: event.target.value })}
-                placeholder="IIIT Allahabad"
-                required
-                disabled={handlingDelivery}
-              />
-            </label>
-            <div className="coordinate-grid">
-              <label>Latitude<input type="number" step="any" min="-90" max="90" value={tripForm.destinationLatitude} onChange={(event) => setTripForm({ ...tripForm, destinationLatitude: event.target.value })} required disabled={handlingDelivery} /></label>
-              <label>Longitude<input type="number" step="any" min="-180" max="180" value={tripForm.destinationLongitude} onChange={(event) => setTripForm({ ...tripForm, destinationLongitude: event.target.value })} required disabled={handlingDelivery} /></label>
-            </div>
-          </div>
+          <LocationPicker
+            label="Heading to"
+            description="Choose the destination you already plan to travel toward."
+            purpose="trip destination"
+            value={tripForm.destination}
+            onChange={(destination) => setTripForm((current) => ({ ...current, destination }))}
+            disabled={handlingDelivery}
+          />
 
           <div className="trip-time-grid">
             <label>
@@ -564,13 +514,11 @@ export default function PartnerDashboardPage() {
                   <span className="trip-dot pickup-dot" />
                   <div>
                     <strong>{trip.origin.label}</strong>
-                    <small>{trip.origin.latitude.toFixed(4)}, {trip.origin.longitude.toFixed(4)}</small>
                   </div>
                   <span className="trip-card-arrow">→</span>
                   <span className="trip-dot destination-dot" />
                   <div>
                     <strong>{trip.destination.label}</strong>
-                    <small>{trip.destination.latitude.toFixed(4)}, {trip.destination.longitude.toFixed(4)}</small>
                   </div>
                 </div>
 

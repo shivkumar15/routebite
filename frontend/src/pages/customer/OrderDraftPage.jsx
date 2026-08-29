@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import api from '../../api/axios.js';
+import LocationPicker from '../../components/location/LocationPicker.jsx';
+import { isCompleteLocation, locationToApiPayload } from '../../utils/location.js';
 
 const EMPTY_FORM = {
   vendorDisplayName: '',
@@ -32,24 +34,6 @@ function toDateTimeLocal(value) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
-function getBrowserLocation() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error('Geolocation is not supported by this browser.'));
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => resolve({
-        latitude: position.coords.latitude.toFixed(6),
-        longitude: position.coords.longitude.toFixed(6),
-      }),
-      () => reject(new Error('Location permission was denied or unavailable.')),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
-    );
-  });
-}
-
 export default function OrderDraftPage() {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -57,7 +41,6 @@ export default function OrderDraftPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(editing);
   const [busy, setBusy] = useState(false);
-  const [locationBusy, setLocationBusy] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -98,27 +81,11 @@ export default function OrderDraftPage() {
     return () => { active = false; };
   }, [editing, orderId]);
 
-  function setLocationField(kind, field, value) {
+  function setLocation(kind, location) {
     setForm((current) => ({
       ...current,
-      [kind]: { ...current[kind], [field]: value },
+      [kind]: location,
     }));
-  }
-
-  async function useMyLocation(kind) {
-    setLocationBusy(kind);
-    setError('');
-    try {
-      const coordinates = await getBrowserLocation();
-      setForm((current) => ({
-        ...current,
-        [kind]: { ...current[kind], ...coordinates },
-      }));
-    } catch (locationError) {
-      setError(locationError.message);
-    } finally {
-      setLocationBusy('');
-    }
   }
 
   async function handleSubmit(event) {
@@ -131,20 +98,17 @@ export default function OrderDraftPage() {
       return;
     }
 
+    if (!isCompleteLocation(form.pickup) || !isCompleteLocation(form.drop)) {
+      setError('Select both pickup and delivery locations, including a clear location name.');
+      return;
+    }
+
     const payload = {
       vendorDisplayName: form.vendorDisplayName,
       requestedItems: form.requestedItems,
       pickupInstructions: form.pickupInstructions,
-      pickup: {
-        label: form.pickup.label,
-        latitude: Number(form.pickup.latitude),
-        longitude: Number(form.pickup.longitude),
-      },
-      drop: {
-        label: form.drop.label,
-        latitude: Number(form.drop.latitude),
-        longitude: Number(form.drop.longitude),
-      },
+      pickup: locationToApiPayload(form.pickup),
+      drop: locationToApiPayload(form.drop),
       deliveryType: form.deliveryType,
       estimatedFoodCostPaise,
     };
@@ -201,32 +165,21 @@ export default function OrderDraftPage() {
             <textarea value={form.pickupInstructions} onChange={(e) => setForm({ ...form, pickupInstructions: e.target.value })} placeholder="Red cart opposite Hanuman Mandir" rows="2" />
           </label>
 
-          {['pickup', 'drop'].map((kind) => (
-            <fieldset className="location-fieldset" key={kind}>
-              <legend>{kind === 'pickup' ? 'Pickup point' : 'Deliver to'}</legend>
-              <div className="location-title-row">
-                <p>{kind === 'pickup' ? 'Where is the food?' : 'Where should it reach?'}</p>
-                <button className="secondary-button compact-button" type="button" disabled={Boolean(locationBusy)} onClick={() => useMyLocation(kind)}>
-                  {locationBusy === kind ? 'Locating…' : 'Use my location'}
-                </button>
-              </div>
-              <label>
-                Location label
-                <input value={form[kind].label} onChange={(e) => setLocationField(kind, 'label', e.target.value)} placeholder={kind === 'pickup' ? 'Civil Lines food lane' : 'IIIT Allahabad main gate'} required />
-              </label>
-              <div className="coordinate-grid">
-                <label>
-                  Latitude <span className="prototype-note">prototype</span>
-                  <input type="number" step="any" min="-90" max="90" value={form[kind].latitude} onChange={(e) => setLocationField(kind, 'latitude', e.target.value)} required />
-                </label>
-                <label>
-                  Longitude <span className="prototype-note">prototype</span>
-                  <input type="number" step="any" min="-180" max="180" value={form[kind].longitude} onChange={(e) => setLocationField(kind, 'longitude', e.target.value)} required />
-                </label>
-              </div>
-              <p className="field-note">These coordinate boxes are temporary prototype controls. Search + map pin will replace them.</p>
-            </fieldset>
-          ))}
+          <LocationPicker
+            label="Pickup point"
+            description="Search for the food place or a nearby landmark, then adjust the pin to the exact stall or shop."
+            purpose="pickup"
+            value={form.pickup}
+            onChange={(location) => setLocation('pickup', location)}
+          />
+
+          <LocationPicker
+            label="Deliver to"
+            description="Choose where the partner should hand over the food."
+            purpose="delivery destination"
+            value={form.drop}
+            onChange={(location) => setLocation('drop', location)}
+          />
 
           <fieldset className="delivery-choice">
             <legend>When do you need it?</legend>
