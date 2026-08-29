@@ -20,6 +20,21 @@ REST refresh/reconnect must recover current truth
 
 ## Hardening added in Phase 15
 
+### Mongoose deprecation cleanup
+
+All runtime `findOneAndUpdate()` calls now request the updated document with:
+
+```js
+{ returnDocument: 'after' }
+```
+
+The deprecated `{ new: true }` alias has been removed from backend source and tests. Model tests also use asynchronous `validate()` instead of Mongoose's deprecated `validateSync()` helper. The full backend suite passes without Mongoose deprecation warnings:
+
+```text
+23 test suites passed
+108 tests passed
+```
+
 ### Partner offer reconnect resync
 
 The partner offer page reloads active offers from REST when:

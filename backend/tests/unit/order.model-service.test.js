@@ -9,7 +9,7 @@ const { Order } = await import('../../src/models/order.model.js');
 const { resolveDeliveryWindow } = await import('../../src/services/order.service.js');
 
 describe('Phase 4 order draft rules', () => {
-  test('new order defaults to DRAFT and stores longitude before latitude', () => {
+  test('new order defaults to DRAFT and stores longitude before latitude', async () => {
     const order = new Order({
       customerId: new mongoose.Types.ObjectId(),
       vendorDisplayName: 'Sharma Chaat',
@@ -26,10 +26,10 @@ describe('Phase 4 order draft rules', () => {
 
     expect(order.status).toBe(ORDER_STATUS.DRAFT);
     expect(order.pickup.coordinates).toEqual([81.8463, 25.4358]);
-    expect(order.validateSync()).toBeUndefined();
+    await expect(order.validate()).resolves.toBeUndefined();
   });
 
-  test('authoritative food cost rejects fractional paise', () => {
+  test('authoritative food cost rejects fractional paise', async () => {
     const order = new Order({
       customerId: new mongoose.Types.ObjectId(),
       vendorDisplayName: 'Sharma Chaat',
@@ -44,7 +44,7 @@ describe('Phase 4 order draft rules', () => {
       pricing: { estimatedFoodCostPaise: 20000.5 },
     });
 
-    const error = order.validateSync();
+    const error = await order.validate().catch((validationError) => validationError);
     expect(error.errors['pricing.estimatedFoodCostPaise']).toBeDefined();
   });
 

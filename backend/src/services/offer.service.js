@@ -143,7 +143,7 @@ async function acquireDispatchLease(matchingAttemptId, now) {
       ],
     },
     { $set: { dispatchLockUntil: leaseUntil } },
-    { new: true },
+    { returnDocument: 'after' },
   );
 }
 
@@ -183,7 +183,7 @@ async function failExhaustedOrder({ order, matchingAttemptId, reason, now }) {
   const moved = await Order.findOneAndUpdate(
     { _id: order._id, status: ORDER_STATUS.MATCHING, assignedPartnerId: null },
     { $set: { status: ORDER_STATUS.MATCHING_FAILED } },
-    { new: true },
+    { returnDocument: 'after' },
   );
 
   if (!moved) return null;
@@ -368,7 +368,7 @@ export async function rejectOffer({ offerId, partnerId }, now = new Date()) {
       expiresAt: { $gt: now },
     },
     { $set: { status: OFFER_STATUS.REJECTED, respondedAt: now } },
-    { new: true },
+    { returnDocument: 'after' },
   );
 
   if (!offer) {
@@ -501,7 +501,7 @@ export async function acceptOffer({ offerId, partnerId }, now = new Date()) {
             assignedTripId: offer.tripId ?? null,
           },
         },
-        { new: true, session },
+        { returnDocument: 'after', session },
       );
 
       if (!assignedOrder) {
@@ -532,7 +532,7 @@ export async function acceptOffer({ offerId, partnerId }, now = new Date()) {
       acceptedOffer = await Offer.findOneAndUpdate(
         { _id: offer._id, status: OFFER_STATUS.PENDING },
         { $set: { status: OFFER_STATUS.ACCEPTED, respondedAt: now } },
-        { new: true, session },
+        { returnDocument: 'after', session },
       );
 
       if (!acceptedOffer) {

@@ -233,7 +233,7 @@ export async function approvePartner({ partnerId, adminUserId }) {
         'collegeIdentity.rejectionReason': null,
       },
     },
-    { new: true, runValidators: true },
+    { returnDocument: 'after', runValidators: true },
   );
 
   if (!updated) {
@@ -260,7 +260,7 @@ export async function rejectPartner({ partnerId, adminUserId, reason }) {
         'collegeIdentity.rejectionReason': reason.trim(),
       },
     },
-    { new: true, runValidators: true },
+    { returnDocument: 'after', runValidators: true },
   );
 
   if (!updated) {

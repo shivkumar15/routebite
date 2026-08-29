@@ -33,7 +33,7 @@ describe('Phase 5 payment rules', () => {
     );
   });
 
-  test('new payment attempt starts active in CREATED state', () => {
+  test('new payment attempt starts active in CREATED state', async () => {
     const payment = new Payment({
       orderId: new mongoose.Types.ObjectId(),
       customerId: new mongoose.Types.ObjectId(),
@@ -43,10 +43,10 @@ describe('Phase 5 payment rules', () => {
 
     expect(payment.status).toBe(PAYMENT_STATUS.CREATED);
     expect(payment.activeAttempt).toBe(true);
-    expect(payment.validateSync()).toBeUndefined();
+    await expect(payment.validate()).resolves.toBeUndefined();
   });
 
-  test('payment model rejects fractional paise', () => {
+  test('payment model rejects fractional paise', async () => {
     const payment = new Payment({
       orderId: new mongoose.Types.ObjectId(),
       customerId: new mongoose.Types.ObjectId(),
@@ -54,7 +54,7 @@ describe('Phase 5 payment rules', () => {
       idempotencyKey: 'payment-test-key-456',
     });
 
-    const error = payment.validateSync();
+    const error = await payment.validate().catch((validationError) => validationError);
     expect(error.errors.amountPaise).toBeDefined();
   });
 

@@ -59,7 +59,7 @@ describe('Phase 10 delivery OTP and completion invariants', () => {
     expect(Order.schema.path('deliveryOtp.hash').options.select).toBe(false);
   });
 
-  test('order persists OTP lifecycle and completion timestamps', () => {
+  test('order persists OTP lifecycle and completion timestamps', async () => {
     const now = new Date();
     const order = validOrder({
       deliveryOtpRequestedAt: now,
@@ -74,7 +74,7 @@ describe('Phase 10 delivery OTP and completion invariants', () => {
       completedAt: null,
     });
 
-    expect(order.validateSync()).toBeUndefined();
+    await expect(order.validate()).resolves.toBeUndefined();
     expect(order.deliveryOtp.attempts).toBe(2);
     expect(order.deliveryOtp.expiresAt).toBeInstanceOf(Date);
   });
@@ -93,7 +93,7 @@ describe('Phase 10 delivery OTP and completion invariants', () => {
     expect(index).toBeDefined();
   });
 
-  test('partner earning money must remain integer paise', () => {
+  test('partner earning money must remain integer paise', async () => {
     const earning = new PartnerEarning({
       orderId: new mongoose.Types.ObjectId(),
       partnerId: new mongoose.Types.ObjectId(),
@@ -103,7 +103,7 @@ describe('Phase 10 delivery OTP and completion invariants', () => {
       earnedAt: new Date(),
     });
 
-    const error = earning.validateSync();
+    const error = await earning.validate().catch((validationError) => validationError);
     expect(error.errors.baseEarningPaise).toBeDefined();
     expect(error.errors.totalEarningPaise).toBeDefined();
   });

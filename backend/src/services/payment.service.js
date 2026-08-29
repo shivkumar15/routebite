@@ -193,7 +193,7 @@ export async function createOrReusePaymentAttempt({ customerId, orderId, idempot
         providerReceipt: providerOrder.receipt ?? receipt,
       },
     },
-    { new: true, runValidators: true },
+    { returnDocument: 'after', runValidators: true },
   );
 
   if (!updatedPayment) {
@@ -218,7 +218,7 @@ export async function createOrReusePaymentAttempt({ customerId, orderId, idempot
         'pricing.estimatedCustomerTotalPaise': pricing.estimatedCustomerTotalPaise,
       },
     },
-    { new: true, runValidators: true },
+    { returnDocument: 'after', runValidators: true },
   );
 
   if (!updatedOrder) {
@@ -322,7 +322,7 @@ export async function verifyAndConfirmPayment({
             confirmedAt: new Date(),
           },
         },
-        { new: true, runValidators: true, session },
+        { returnDocument: 'after', runValidators: true, session },
       );
 
       if (!confirmedPayment) {

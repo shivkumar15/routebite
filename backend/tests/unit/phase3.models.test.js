@@ -7,7 +7,7 @@ function objectId() {
 }
 
 describe('Phase 3 geospatial schemas', () => {
-  test('partner accepts GeoJSON in longitude-latitude order', () => {
+  test('partner accepts GeoJSON in longitude-latitude order', async () => {
     const partner = new Partner({
       userId: objectId(),
       profilePhotoAssetId: objectId(),
@@ -22,11 +22,11 @@ describe('Phase 3 geospatial schemas', () => {
       },
     });
 
-    expect(partner.validateSync()).toBeUndefined();
+    await expect(partner.validate()).resolves.toBeUndefined();
     expect(partner.currentLocation.coordinates).toEqual([81.77, 25.43]);
   });
 
-  test('partner rejects invalid GeoJSON latitude', () => {
+  test('partner rejects invalid GeoJSON latitude', async () => {
     const partner = new Partner({
       userId: objectId(),
       profilePhotoAssetId: objectId(),
@@ -41,7 +41,7 @@ describe('Phase 3 geospatial schemas', () => {
       },
     });
 
-    expect(partner.validateSync()).toBeDefined();
+    await expect(partner.validate()).rejects.toBeDefined();
   });
 
   test('trip schema has geospatial indexes and a one-active-trip unique index', () => {

@@ -761,25 +761,31 @@ Latest hardening commits have remained green before local rehearsal commands wer
 
 ---
 
-# 5. Known Non-Blocking Cleanup
+# 5. Completed Compatibility Cleanup
 
 ## Mongoose deprecation warnings
 
-Some older code still uses:
+The remaining runtime calls that used:
 
 ```js
 { new: true }
 ```
 
-with `findOneAndUpdate()`.
-
-Current Mongoose versions prefer:
+with `findOneAndUpdate()` now use:
 
 ```js
 { returnDocument: 'after' }
 ```
 
-The warnings did not invalidate any hardening test, but Phase 15 should clean remaining occurrences before final merge where practical.
+The model tests were also migrated from deprecated `validateSync()` calls to asynchronous `validate()` assertions. Verification after the cleanup:
+
+```text
+backend source/test deprecation scan: clean
+backend Jest: 23 suites / 108 tests passed
+Mongoose deprecation warnings: none
+```
+
+Node's experimental VM-modules notice remains a Jest runtime notice, not a Mongoose warning or application failure.
 
 ---
 
