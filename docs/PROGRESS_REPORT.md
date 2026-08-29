@@ -2,7 +2,7 @@
 
 > **Last updated:** 29 August 2026
 > **Current branch:** `phase-15-full-rehearsal-hardening`
-> **Prototype status:** Phase 0–14 complete and merged. Phase 15 hardening in progress.
+> **Prototype status:** Phase 0–14 merged. Phase 15 engineering and rehearsal complete; awaiting PR review and merge.
 
 This document is the current source of truth for what has been completed, how each milestone was validated, and what remains before the RouteBite prototype can be considered finished.
 
@@ -615,11 +615,10 @@ Phase 14 merge commit:
 
 ---
 
-# 4. Phase 15 — Full Rehearsal and Hardening 🚧 IN PROGRESS
+# 4. Phase 15 — Full Rehearsal and Hardening ✅ COMPLETE
 
-Phase 15 is the final prototype phase.
-
-The goal is not to add another large product feature. The goal is to repeatedly attempt to break the complete system and fix any path that still requires manual MongoDB editing.
+Phase 15 proved the complete development prototype and its critical race/recovery invariants
+without manual MongoDB editing.
 
 Current branch:
 
@@ -627,137 +626,41 @@ Current branch:
 phase-15-full-rehearsal-hardening
 ```
 
-## Hardening completed so far
+## Final evidence
 
-### A. Development DB invariant audit ✅ PASSED
+- Mongoose `new: true` / synchronous validation deprecations removed.
+- Partner Available Now location refreshes every 15 seconds while eligible.
+- Customer active-delivery tracking has a 30-second REST fallback in addition to Socket.IO.
+- AVAILABLE_NOW browser flow passed payment, matching, atomic assignment, pickup, higher-price
+  approval, tracking/reconnect, wrong-OTP protection, completion, one earning, rating and admin
+  inspection.
+- Scheduled / On My Way browser flow passed compatible route matching while the partner was
+  offline for Available Now work, offer acceptance, automatic ₹200 → ₹180 downward adjustment,
+  pickup, delivery OTP, completion, one earning and admin inspection.
+- An intentionally unaccepted offer advanced to explicit `MATCHING_FAILED` with no assignment
+  or earning.
+- Existing cancellation and failure-recovery behavior remained explicit and inspectable through
+  Admin Operations.
 
-Command:
-
-```powershell
-npm run hardening:audit
-```
-
-Actual result on the current development DB:
-
-```text
-RouteBite Phase 15 invariant audit · latest 15 order(s)
-Errors: 0
-Warnings: 0
-PASS: no invariant issues found in the audited orders.
-```
-
-The audit checks conditions including:
-
-- MATCHING order must not already have an assigned partner
-- active fulfillment order must have an assigned partner
-- partner `activeOrderId` must point back to active assignment
-- terminal/released order must not lock a partner
-- maximum one ACCEPTED offer per order
-- accepted offer partner must equal assigned partner
-- completed order must have completion timestamp
-- earning cardinality must remain valid
-- confirmed payment/order-state consistency
-
-The audit is read-only.
-
-### B. Offer acceptance concurrency ✅ PASSED
-
-Command:
-
-```powershell
-npm run hardening:accept-race -- --confirm-dev-db
-```
-
-Actual result:
+Final development-database rehearsals:
 
 ```text
-one fulfilled
-one rejected
-one ACCEPTED offer
-one CANCELLED losing offer
-exactly one partner assigned
-PASS
+hardening:accept-race            PASS · exactly one acceptance winner
+hardening:restart-offer          PASS · persisted offer recovered and expired explicitly
+hardening:webhook-idempotency    PASS · one event / one matching attempt
+hardening:completion-idempotency PASS · one completion / one earning
+hardening:audit                  PASS · latest 18 orders · 0 errors / 0 warnings
 ```
 
-Temporary fixtures were automatically cleaned up.
-
-### C. Server restart / pending offer persistence ✅ PASSED
-
-Command:
-
-```powershell
-npm run hardening:restart-offer -- --confirm-dev-db
-```
-
-Actual result:
+CI installs from committed backend/frontend lockfiles with `npm ci` and passes:
 
 ```text
-PASS 1: valid pending offer survived restart maintenance.
-PASS 2: expired persisted offer advanced to explicit MATCHING_FAILED without DB editing.
-PASS: server restart / pending-offer persistence rehearsal succeeded.
+hardening syntax checks
+backend Jest · 23 suites / 108 tests
+frontend production build
 ```
 
-This confirms offers are persisted in MongoDB and do not depend on Node/Socket process memory.
-
-### D. Delivery completion idempotency ✅ PASSED
-
-Command:
-
-```powershell
-npm run hardening:completion-idempotency -- --confirm-dev-db
-```
-
-Actual result:
-
-```text
-first completion → fulfilled / COMPLETED
-second concurrent completion → rejected / ACTIVE_ORDER_REQUIRED
-orderStatus → COMPLETED
-otpUsed → true
-partnerActiveOrderId → null
-completedOrderCount → 1
-earningCount → 1
-PASS
-```
-
-### E. Razorpay webhook idempotency ✅ PASSED
-
-Command:
-
-```powershell
-npm run hardening:webhook-idempotency -- --confirm-dev-db
-```
-
-The rehearsal was improved so it uses an isolated synthetic webhook secret instead of requiring the developer's real Razorpay webhook secret.
-
-Actual result:
-
-```text
-first delivery:
-  duplicate = false
-  processed = true
-
-second delivery:
-  duplicate = true
-  processed = true
-
-paymentStatus = PAYMENT_CONFIRMED
-webhookEventCount = 1
-matchingAttemptCount = 1
-PASS
-```
-
-The synthetic fixture naturally reached `MATCHING_FAILED` because it intentionally did not create a real matching partner; this does not affect the webhook idempotency assertion.
-
-### F. CI ✅ GREEN
-
-Throughout Phase 15, GitHub Actions continues checking:
-
-- hardening script syntax
-- backend test suite
-- frontend production build
-
-Latest hardening commits have remained green before local rehearsal commands were handed off.
+Phase 15 exit criteria are satisfied on the development prototype.
 
 ---
 
@@ -791,132 +694,22 @@ Node's experimental VM-modules notice remains a Jest runtime notice, not a Mongo
 
 # 6. What Is Left
 
-The backend race/idempotency block is essentially complete.
+No Phase 15 engineering or rehearsal blocker remains.
 
-The remaining Phase 15 work is primarily full browser rehearsal and final cleanup.
-
-## Remaining manual/full-system rehearsal
-
-### 1. AVAILABLE_NOW happy path
-
-Run one complete request without DB editing:
+The only remaining prototype milestone steps are:
 
 ```text
-customer creates request
-→ Razorpay Test payment
-→ matching
-→ AVAILABLE_NOW partner gets offer
-→ partner accepts
-→ pickup
-→ actual food price
-→ pickup confirmed
-→ live delivery tracking
-→ delivery OTP
-→ COMPLETED
-→ earning
-→ customer rating/review
+open Phase 15 pull request
+→ verify PR-triggered GitHub Actions
+→ review
+→ merge to main
 ```
 
-### 2. On My Way happy path
-
-Repeat the complete delivery using a compatible scheduled/active trip partner.
-
-Verify:
-
-- route direction compatibility
-- detour behavior
-- offer delivery
-- accepted trip partner assignment
-- complete delivery path
-
-### 3. Price increase path
-
-Verify:
-
-```text
-actual food cost > estimate
-→ PRICE_CONFIRMATION_REQUIRED
-→ customer approves
-→ pickup continues
-```
-
-### 4. Price decrease path
-
-Verify:
-
-```text
-actual food cost < estimate
-→ automatic downward demo adjustment
-→ no unnecessary approval
-```
-
-### 5. Failure paths
-
-Rehearse at least:
-
-- no partner available
-- partner rejects offer
-- offer expires
-- customer cancels before pickup
-- partner cancels before purchase and order rematches
-- wrong OTP
-- expired/regenerated OTP where practical
-- partner post-pickup failure → admin review
-
-### 6. Browser/network resilience
-
-Verify:
-
-- refresh customer page during active delivery
-- refresh partner page during active delivery
-- Socket.IO disconnect/reconnect
-- partner offer page resynchronizes from REST after reconnect
-- current order remains correct after refresh
-
-### 7. Admin final inspection
-
-After the rehearsal, inspect generated orders through Admin Operations and verify:
-
-- successful timeline
-- failed/cancelled reason box
-- payment state
-- matching attempts/offers
-- recovery details
-- accounting projection
-- receipt/proof when present
-
-### 8. Final invariant audit
-
-After all manual rehearsal scenarios:
-
-```powershell
-npm run hardening:audit
-```
-
-Expected final result:
-
-```text
-Errors: 0
-Warnings: 0
-```
-
-### 9. Final CI + PR + merge
-
-When all final rehearsals pass:
-
-```text
-Phase 15 branch
-   ↓
-GitHub Actions green
-   ↓
-Phase 15 PR
-   ↓
-PR-triggered CI green
-   ↓
-merge to main
-```
-
-At that point the planned RouteBite prototype is complete.
+A successful merge means the planned RouteBite **development prototype** is complete. It does
+not mean RouteBite is ready for public production use. Major post-prototype work still includes
+live-payment settlement/refunds, production deployment and monitoring, security review,
+load/failure testing, backup/restore drills, legal and food-handling policy, partner KYC and
+real operational support.
 
 ---
 
@@ -982,12 +775,12 @@ Phase 11  Demo ledger / earnings           ✅
 Phase 12  Cancellation / recovery          ✅
 Phase 13  Admin operations                 ✅
 Phase 14  Ratings / reviews                ✅
-Phase 15  Full rehearsal / hardening       🚧
+Phase 15  Full rehearsal / hardening       ✅
 ```
 
 Approximate project state:
 
-> **Feature implementation is essentially complete. The remaining work is final end-to-end rehearsal, resilience/failure validation, cleanup of any issues discovered, final invariant audit, CI, and Phase 15 merge.**
+> **The planned development-prototype implementation and Phase 15 verification are complete. Pull-request review, green PR checks and merge remain; production readiness is a separate milestone.**
 
 ---
 
