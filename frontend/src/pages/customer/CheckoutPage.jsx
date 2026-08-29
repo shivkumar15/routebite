@@ -14,6 +14,10 @@ const CANCELLABLE_STATUSES = new Set([
   'PARTNER_TO_PICKUP',
   'PRICE_CONFIRMATION_REQUIRED',
 ]);
+const TRACKABLE_DELIVERY_STATUSES = new Set([
+  'OUT_FOR_DELIVERY',
+  'DELIVERY_OTP_REQUIRED',
+]);
 
 function formatMoney(paise) {
   return `₹${(Number(paise) / 100).toFixed(2)}`;
@@ -193,6 +197,36 @@ export default function CheckoutPage() {
       socket.disconnect();
     };
   }, [loadState, orderId]);
+
+  useEffect(() => {
+    if (!TRACKABLE_DELIVERY_STATUSES.has(order?.status)) return undefined;
+
+    let active = true;
+
+    async function refreshTrackingFallback() {
+      try {
+        const { data } = await api.get(`/orders/${orderId}/tracking`);
+        if (!active) return;
+
+        const latestTracking = data.data.tracking;
+        setTracking(latestTracking);
+
+        if (latestTracking?.status && latestTracking.status !== order.status) {
+          await loadState();
+        }
+      } catch {
+        // Socket.IO remains the fast path. A later fallback tick, reconnect,
+        // focus event or manual refresh can still recover canonical REST state.
+      }
+    }
+
+    const timer = window.setInterval(refreshTrackingFallback, 30000);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [loadState, orderId, order?.status]);
 
   async function verifyCheckoutResponse(response) {
     const { data } = await api.post(`/orders/${orderId}/payment/verify`, {
