@@ -161,7 +161,7 @@ hardening:completion-idempotency PASS · one completion / one earning
 
 These results prove the tested development state at rehearsal time; the scripts remain repeatable and should be rerun before final merge if later hardening changes touch the relevant flows.
 
-### Browser rehearsal finding: Available Now location heartbeat
+### Browser rehearsal findings
 
 The first final browser rehearsal proved request creation, Razorpay Test Mode confirmation,
 matching, offer delivery and the expected `MATCHING_FAILED` outcome after the offer was left
@@ -170,8 +170,18 @@ unaccepted. It also exposed that the partner dashboard saved location only when 
 
 The dashboard now refreshes browser location every 15 seconds while the partner remains
 `AVAILABLE_NOW`, stops the timer after going offline or receiving an active order, and shows a
-visible warning if a refresh fails. Browser verification must confirm that the displayed update
-time advances before the full happy-path rehearsal continues.
+visible warning if a refresh fails. Browser verification confirmed that the displayed update time
+advances while the partner remains available.
+
+A subsequent complete `AVAILABLE_NOW` rehearsal passed assignment, partner locking, pickup,
+higher-price customer approval, live delivery, customer refresh recovery, wrong-OTP rejection,
+successful completion, partner release and creation of one earning. During delivery, an
+intermittently missed Socket.IO location update made the customer badge show `Location delayed`;
+manual refresh correctly recovered the latest MongoDB state through REST.
+
+The checkout now also refreshes canonical tracking state from REST every 30 seconds while
+delivery tracking is active. Socket.IO remains the fast path, while this bounded fallback recovers
+a missed location or terminal-state notification without requiring a manual browser refresh.
 
 ### CI protection
 
