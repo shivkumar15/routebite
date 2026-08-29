@@ -1,6 +1,6 @@
 # Phase 16 — Location Experience Foundation
 
-> **Status:** PROPOSED — implementation waits for joint approval of the decisions below
+> **Status:** CONFIRMED — implementation active
 >
 > **Branch:** `phase-16-location-experience`
 >
@@ -14,7 +14,7 @@ Phase 16 improves **location selection**. It does not redesign every screen and 
 
 ## Decision checkpoint
 
-Implementation begins after joint approval of:
+Approved implementation contract:
 
 ```text
 Provider: Google Maps Platform behind a RouteBite adapter
@@ -23,7 +23,7 @@ Stored contract: existing label/latitude/longitude payload and GeoJSON
 Fallback: development-only raw coordinates until map rehearsal passes
 ```
 
-The product owner never sends API keys through chat or commits them. They are placed only in local/deployment environment configuration.
+Approved by the product owner on 29 August 2026. The product owner never sends API keys through chat or commits them. They are placed only in local/deployment environment configuration.
 
 ## Problem being solved
 
