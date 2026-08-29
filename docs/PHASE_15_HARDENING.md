@@ -175,9 +175,15 @@ advances while the partner remains available.
 
 A subsequent complete `AVAILABLE_NOW` rehearsal passed assignment, partner locking, pickup,
 higher-price customer approval, live delivery, customer refresh recovery, wrong-OTP rejection,
-successful completion, partner release and creation of one earning. During delivery, an
-intermittently missed Socket.IO location update made the customer badge show `Location delayed`;
-manual refresh correctly recovered the latest MongoDB state through REST.
+successful completion, partner release and creation of one earning. The customer then submitted
+one 5-star rating with written feedback; the partner review showed the correct order context and
+only the customer's first name. Admin Operations showed a coherent completed-order timeline,
+payment, accepted offer, approved price adjustment, single earning and rating. The earlier
+unaccepted offer also remained visible as an explicit `MATCHING_FAILED` order with no assignment
+or earning and the expected demo-refund projection.
+
+During delivery, an intermittently missed Socket.IO location update made the customer badge show
+`Location delayed`; manual refresh correctly recovered the latest MongoDB state through REST.
 
 The checkout now also refreshes canonical tracking state from REST every 30 seconds while
 delivery tracking is active. Socket.IO remains the fast path, while this bounded fallback recovers
