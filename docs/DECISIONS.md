@@ -496,6 +496,56 @@ TypeScript may be reconsidered later.
 
 ---
 
+## ADR-049 — Phase 15 is the protected post-MVP baseline
+
+**Status:** CONFIRMED
+
+**Decision:** Preserve merge commit `c16c338e5246b5c0ac5529b299d4cbeef31aa277` as the known-good behavioral baseline while RouteBite enters product evolution.
+
+Future work uses one focused phase branch and pull request at a time. A UI or provider change must not weaken the Phase 15 matching, payment, offer, recovery, OTP, earning or REST-recovery invariants.
+
+---
+
+## ADR-050 — Google Maps behind a RouteBite location-provider adapter
+
+**Status:** CONFIRMED
+
+**Decision:** Use Google Maps Platform for the initial judged and campus-pilot location experience, but keep provider objects behind a RouteBite adapter.
+
+Normal users select locations through:
+
+```text
+place/address search
+current device location
+draggable/manual map pin
+```
+
+Latitude/longitude remain implementation details. The existing `{ label, latitude, longitude }` API payload and GeoJSON `[longitude, latitude]` persistence remain unchanged during Phase 16.
+
+**Safety:** Use separate restricted browser/server keys, provider mocks in automated tests, quotas/budget alerts, and an explicit development-only coordinate fallback until browser rehearsal passes.
+
+---
+
+## ADR-051 — Working-product language with one truthful test disclosure
+
+**Status:** CONFIRMED
+
+**Decision:** Routine product UI must not repeatedly label RouteBite a demo or prototype. Actions and outcomes use normal product language such as `Earnings`, `Payment summary` and `Refund details`.
+
+Test-only financial movement remains explicitly disclosed through one reusable Test environment notice. Internal demo accounting statuses and historical milestone documents are not renamed merely for appearance.
+
+---
+
+## ADR-052 — Compact state-driven utility interface
+
+**Status:** CONFIRMED
+
+**Decision:** Keep the coral/burgundy/cream identity and route motif, while making forms, dashboards, cards and admin views compact and state-driven.
+
+Large display typography is reserved for true marketing/hero content. Operational screens prioritize clear hierarchy, responsive density, accessibility, real state timelines, useful loading/recovery states and restrained explanatory motion.
+
+---
+
 # Deferred Production Decisions
 
 The following remain intentionally deferred.
