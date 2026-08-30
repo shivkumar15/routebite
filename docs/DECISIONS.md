@@ -522,7 +522,7 @@ draggable/manual map pin
 
 Latitude/longitude remain implementation details. The existing `{ label, latitude, longitude }` API payload and GeoJSON `[longitude, latitude]` persistence remain unchanged during Phase 16.
 
-**Safety:** Use separate restricted browser/server keys, provider mocks in automated tests, quotas/budget alerts, and an explicit development-only coordinate fallback until browser rehearsal passes.
+**Cost and safety update (31 August 2026):** Use Google's no-cost Maps Demo Key for Phase 16 development/judge rehearsal. It has limited daily quotas that pause usage rather than charging and is not a production credential. Defer standard billing until controlled pilot/production readiness or a demonstrated unsupported-feature need. A later standard setup must use separate restricted browser/server keys, provider mocks in automated tests, quotas/budget controls, and an explicit development-only coordinate fallback until browser rehearsal passes.
 
 ---
 

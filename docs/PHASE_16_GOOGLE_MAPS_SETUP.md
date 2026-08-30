@@ -1,12 +1,18 @@
 # Phase 16 — Google Maps Setup and Live Rehearsal
 
-> **Status:** OWNER ACTION REQUIRED — browser key is now needed for live provider testing
+> **Status:** OWNER ACTION REQUIRED — no-cost Maps Demo Key is now needed for live provider testing
 >
 > **Code checkpoint:** `bf1d4f68f717d06c52dd77fd2b462de75d63b1f6`
 >
 > **GitHub Actions:** RouteBite checks run #393 passed
 
-This runbook is the source of truth for configuring Google Maps Platform for RouteBite Phase 16. The application code, mocked provider tests, backend regressions and production build are already green. Account creation, billing acceptance and the restricted browser key are the only steps that require the product owner's Google Cloud access.
+This runbook is the source of truth for configuring Google Maps Platform for RouteBite Phase 16. The application code, mocked provider tests, backend regressions and production build are already green.
+
+## Cost decision update — 31 August 2026
+
+Use Google's **Maps Demo Key** for Phase 16 development and judge rehearsal. Google documents this as a no-cost key that does not require billing information. It supports map rendering, markers/events, Place Class and Places API (New), with limited daily quotas. When the quota is reached, usage pauses until the next day instead of creating charges.
+
+Do not scan a payment QR or enable paid billing merely to complete Phase 16. Move to a standard billing-enabled key only before a controlled pilot, or if live rehearsal proves that a required RouteBite feature is outside the Demo Key's supported set.
 
 ## 1. Credential separation
 
@@ -14,29 +20,31 @@ RouteBite uses separate credentials for separate trust boundaries.
 
 | Credential | Local file | Used by | Required APIs | Restriction |
 | --- | --- | --- | --- | --- |
-| Browser key | `frontend/.env` as `VITE_GOOGLE_MAPS_BROWSER_KEY` | Map, place search and reverse geocoding in the browser | Maps JavaScript API, Places API (New), Geocoding API | Websites / HTTP referrers plus API restrictions |
+| Phase 16 Demo Key | `frontend/.env` as `VITE_GOOGLE_MAPS_BROWSER_KEY` | Development/judge map, place search and pin rehearsal | Demo-supported Maps JavaScript/Places features | No billing; limited daily quota; never use for production |
+| Standard browser key | Same variable in pilot/deployment configuration | Production-capable map, place search and reverse geocoding | Maps JavaScript API, Places API (New), Geocoding API | Websites / HTTP referrers plus API restrictions |
 | Server key | `backend/.env` as `GOOGLE_MAPS_API_KEY` | Existing server-side route estimate service | Routes API | API restriction and server-appropriate application restriction when the deployment platform supports it |
 
-Do not reuse one key for both rows. A browser key appears in the downloaded frontend by design; its safety comes from strict website and API restrictions, not secrecy. Server credentials must never enter a `VITE_` variable or the frontend bundle.
+Do not reuse a browser key as the server key. A browser key appears in the downloaded frontend by design. Standard browser keys require strict website/API restrictions; server credentials must never enter a `VITE_` variable or the frontend bundle.
 
-## 2. Create the Google Cloud project
+## 2. Get the no-cost Maps Demo Key — Phase 16 path
 
-1. Sign in to [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a dedicated project such as `routebite-mvp`, or select an existing RouteBite-only project.
-3. Link a billing account when Google requests it.
-4. In **APIs & Services → Library**, enable exactly these Phase 16 browser services:
-   - **Maps JavaScript API**
-   - **Places API (New)**
-   - **Geocoding API**
-5. Enable **Routes API** only if the existing backend route-estimate key is also being configured in this project.
+1. Open Google's official [Get a Maps Demo Key](https://developers.google.com/maps/documentation/javascript/demo-key) page.
+2. Sign in with the product owner's Google account.
+3. Select **Get a Demo Key** and accept the Maps Demo Project terms.
+4. Copy the generated key privately. Do not enter billing information and do not scan a payment QR for this phase.
+5. Put the Demo Key in the local environment using section 4.
 
-Do not enable unrelated Maps APIs “just in case.” A smaller enabled surface is easier to secure and monitor.
+The Demo Key is for development/rehearsal only. Google may change its quotas, and reaching the limit pauses service. It must be replaced before a real-user production launch.
 
-## 3. Create and restrict the browser key
+Google explicitly lists Geocoding API v4 for Demo Keys, while RouteBite currently reverse-geocodes moved pins through the Maps JavaScript geocoding library. Treat automatic pin-label lookup as a live compatibility checkpoint. If it is unavailable, RouteBite safely keeps the selected point and asks for a human-readable label; do not enable billing automatically without reviewing that result.
 
-1. Open **APIs & Services → Credentials**.
-2. Choose **Create credentials → API key**.
-3. Rename it to `RouteBite browser - development`.
+## 3. Standard browser key — deferred pilot/production path
+
+Do this later only when RouteBite deliberately accepts a billing-enabled Maps account:
+
+1. Create/select a dedicated RouteBite Google Cloud project and link billing.
+2. Enable Maps JavaScript API, Places API (New) and Geocoding API.
+3. Open **APIs & Services → Credentials**, create an API key and name it `RouteBite browser`.
 4. Under **Application restrictions**, select **Websites** / **HTTP referrers**.
 5. Add the development referrers that will actually be used:
 
@@ -87,7 +95,16 @@ cd backend
 npm run dev
 ```
 
-## 5. Cost safeguards before sharing a link
+## 5. Cost safeguards
+
+### Demo Key
+
+- no billing information is required;
+- daily quotas pause usage rather than charging;
+- do not upgrade it during Phase 16 merely to avoid a quota pause;
+- never share the key or use it as a production credential.
+
+### Standard billing-enabled key
 
 1. In **Billing → Budgets & alerts**, create a small project-scoped budget with email thresholds.
 2. If **Spend cap budget** is offered and the required Maps services are eligible, use it for this development project.
@@ -99,6 +116,7 @@ Do not automate disabling billing for this project without a separate recovery r
 
 Official references:
 
+- [Get and use a no-cost Maps Demo Key](https://developers.google.com/maps/documentation/javascript/demo-key)
 - [Set up the Maps JavaScript API](https://developers.google.com/maps/documentation/javascript/get-api-key)
 - [API key security best practices](https://developers.google.com/maps/api-security-best-practices)
 - [Create and manage Cloud Billing budgets](https://docs.cloud.google.com/billing/docs/how-to/budgets)
@@ -125,10 +143,9 @@ Keep pull request #17 in draft until this checklist passes.
 
 ```text
 [ ] browser key is in frontend/.env only
-[ ] browser key has website/referrer restrictions
-[ ] browser key is restricted to three Phase 16 APIs
-[ ] billing budget/alerts are configured
-[ ] adjustable API quotas were reviewed
+[ ] Phase 16 uses a no-cost Maps Demo Key without billing
+[ ] if a standard key is used later, website/API restrictions are applied
+[ ] if billing is enabled later, budgets, alerts and adjustable quotas are configured first
 [ ] frontend was restarted after the .env change
 ```
 

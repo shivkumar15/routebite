@@ -78,7 +78,7 @@ Use **Google Maps Platform behind a RouteBite provider adapter** for the first j
 
 This matches the existing architecture and product documentation, provides place search and reliable maps/routes in one ecosystem, and minimizes integration risk before judging. The adapter prevents the UI and business services from becoming permanently coupled to one provider.
 
-This recommendation was jointly approved on 29 August 2026. The provider-isolated code and automated regression checkpoint are complete; the restricted Google Cloud browser key and live rehearsal now require owner involvement.
+This recommendation was jointly approved on 29 August 2026. The provider-isolated code and automated regression checkpoint are complete; a no-cost Maps Demo Key and live rehearsal now require owner involvement. Standard paid billing is deferred.
 
 ### User experience
 
@@ -106,7 +106,8 @@ Server-side route estimates remain behind the existing route-estimate service. M
 
 ### Required safeguards
 
-- Separate browser-restricted and server-side API keys.
+- Use a no-cost Maps Demo Key for development/judge rehearsal; defer standard billing until controlled pilot/production readiness or a demonstrated unsupported-feature need.
+- When standard billing is enabled, use separate browser-restricted and server-side API keys.
 - Restrict browser key by allowed referrer and enabled API.
 - Restrict server key by API and infrastructure capability.
 - Debounce search and use Places session tokens correctly.
@@ -485,4 +486,4 @@ phase-16-location-experience
 
 The provider boundary, reusable picker, customer/partner integrations, frontend tests, production build and GitHub Actions checkpoint are complete at `bf1d4f68f717d06c52dd77fd2b462de75d63b1f6`.
 
-The immediate next action is the product owner's restricted Google Maps browser-key setup followed by the live desktop/phone checklist in [`PHASE_16_GOOGLE_MAPS_SETUP.md`](./PHASE_16_GOOGLE_MAPS_SETUP.md). Raw coordinates remain available only behind the explicit development fallback until search, current location and pin selection all pass.
+The immediate next action is the product owner's no-cost Maps Demo Key setup followed by the live desktop/phone checklist in [`PHASE_16_GOOGLE_MAPS_SETUP.md`](./PHASE_16_GOOGLE_MAPS_SETUP.md). Standard paid billing is deferred. Raw coordinates remain available only behind the explicit development fallback until search, current location and pin selection all pass.

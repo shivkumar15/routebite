@@ -46,7 +46,7 @@ Completed at this checkpoint:
 
 No order state, payment, matching, assignment, OTP, earning or database-schema code changed.
 
-The next required checkpoint is the owner-configured restricted browser key and live rehearsal. Follow [`PHASE_16_GOOGLE_MAPS_SETUP.md`](./PHASE_16_GOOGLE_MAPS_SETUP.md). Pull request #17 remains draft until the live checklist passes.
+The next required checkpoint is the owner-configured no-cost Maps Demo Key and live rehearsal. Standard paid billing is deferred until pilot/production readiness or a demonstrated unsupported-feature need. Follow [`PHASE_16_GOOGLE_MAPS_SETUP.md`](./PHASE_16_GOOGLE_MAPS_SETUP.md). Pull request #17 remains draft until the live checklist passes.
 
 ## Problem being solved
 
@@ -229,7 +229,7 @@ Keep the current server configuration name to avoid an unnecessary deployment mi
 GOOGLE_MAPS_API_KEY=
 ```
 
-The implementation must update both `.env.example` files and startup/provider error messages. Browser configuration is public by nature but the key must be referrer/API restricted. Server credentials never enter the frontend bundle.
+The implementation must update both `.env.example` files and startup/provider error messages. A standard browser key is public by nature and must be referrer/API restricted. The Phase 16 Demo Key is limited to development/rehearsal and must not become the production credential. Server credentials never enter the frontend bundle.
 
 The browser key needs Maps JavaScript API, Places API (New) and Geocoding API. The browser and server keys remain separate. Exact account, referrer, quota and rehearsal instructions are maintained in [`PHASE_16_GOOGLE_MAPS_SETUP.md`](./PHASE_16_GOOGLE_MAPS_SETUP.md).
 
