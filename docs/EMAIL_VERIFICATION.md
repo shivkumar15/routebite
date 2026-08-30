@@ -1,6 +1,6 @@
 # RouteBite — Account Email Verification
 
-> **Status:** IMPLEMENTED — live inbox delivery configuration required
+> **Status:** IMPLEMENTED — owner inbox delivery and verification passed
 >
 > **Provider:** Resend
 >
@@ -42,6 +42,12 @@ The application code already supports real inbox delivery:
 - production rejects missing/failed email delivery instead of exposing an OTP in logs.
 
 If the code appears in the backend terminal, `RESEND_API_KEY` is missing or Resend rejected the request. That is a configuration/provider result, not the intended user experience.
+
+## Live evidence
+
+On 30 August 2026, the product owner configured Resend and confirmed that the account-verification email arrived and the verification flow worked without retrieving the code from the backend terminal.
+
+This proves the initial owner-inbox path. It does not yet prove arbitrary-recipient delivery: the default Resend sender remains restricted until RouteBite configures a verified owned sending domain/subdomain.
 
 ## Provider
 
@@ -86,7 +92,7 @@ Restart the backend after changing `.env`.
 ## Acceptance gates
 
 ```text
-[ ] personal inbox receives the code without reading the backend terminal
+[x] personal inbox receives the code without reading the backend terminal
 [ ] UI says the code was sent to the account email
 [ ] wrong, expired and reused codes remain rejected
 [ ] resend cooldown and attempt limit remain enforced
