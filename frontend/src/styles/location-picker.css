@@ -65,6 +65,22 @@
   width: 100%;
 }
 
+.location-search-element {
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  outline: none;
+  background-color: #fff;
+  color: var(--color-text-muted);
+  color-scheme: light;
+  font: inherit;
+}
+
+.location-search-element:focus-within {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px rgba(91, 36, 52, 0.1);
+}
+
 .location-label-input input,
 .location-development-controls input {
   width: 100%;
