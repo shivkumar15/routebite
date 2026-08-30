@@ -60,6 +60,14 @@ Utility screens should use compact typography, restrained radii and shadows, cle
 
 Decorative motion must never obscure order truth, slow an operational action, or replace accessible text.
 
+### Account-verification delivery rule
+
+- The normal account-verification code must arrive in the user's email inbox through the existing Resend integration.
+- A terminal OTP is an explicit local-development fallback, not a normal customer or partner flow.
+- Production/provider failure must never pretend that an email was delivered or expose the raw OTP in logs.
+- Before external testers are invited, RouteBite needs a verified sending domain/subdomain, a matching sender address, delivery rehearsal and quota/abuse monitoring.
+- Phone SMS remains a separate future trust signal. It is not required merely to make email verification usable.
+
 ---
 
 ## 2. CTO Recommendation — Location Experience
@@ -370,6 +378,7 @@ Deliverables:
 - rate-limit and security review;
 - backup/restore and rollback drill;
 - Maps/Razorpay/Cloudinary/Resend quota and privacy checks;
+- verified Resend sending domain, transactional sender, delivery/bounce/complaint visibility and account-OTP rehearsal;
 - pilot operations, support and incident checklist;
 - legal, food-handling, partner identity and real-payment gaps documented as launch blockers where applicable.
 
@@ -377,6 +386,7 @@ Exit criteria:
 
 - deployment is reproducible from a Git commit;
 - no secret or development fallback reaches production;
+- account-verification OTP reaches real inboxes and never requires terminal access;
 - deep links, secure cookies, WebSockets and maps work over HTTPS;
 - restore/rollback steps are proven;
 - public claims match actual capabilities.
@@ -417,6 +427,7 @@ No large product decision should be hidden inside a code commit.
 | Utility UI density | Compact type/cards; large display type only for true hero content | Confirmed 29 August 2026 |
 | Product terminology | Remove repetitive prototype/demo UI labels | Confirmed 29 August 2026 |
 | Financial disclosure | One reusable Test environment notice; never imply real settlement | Confirmed 29 August 2026 |
+| Account verification delivery | Email inbox through Resend; console only as an explicit development fallback; SMS deferred | Confirmed 30 August 2026 |
 | Delivery order | Phase 16 location first, then tracking, language and UI system | Confirmed 29 August 2026 |
 
 The approved decisions are recorded in `DECISIONS.md`. A later change must supersede the relevant ADR rather than silently changing implementation.

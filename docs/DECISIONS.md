@@ -546,6 +546,18 @@ Large display typography is reserved for true marketing/hero content. Operationa
 
 ---
 
+## ADR-053 — Account verification is delivered by email, not the terminal
+
+**Status:** CONFIRMED
+
+**Decision:** The normal customer and partner account-verification code is delivered to the registered email address through the existing Resend adapter. Backend-terminal OTP output is an explicitly identified local-development fallback only; it is not an acceptable pilot, judge or production flow.
+
+For the first owner-only test, Resend's default `onboarding@resend.dev` sender may deliver to the email associated with the Resend account. Before external users are invited, RouteBite must use a verified owned domain/subdomain and matching sender address.
+
+**Safety:** Store only the OTP hash, retain expiry/cooldown/attempt controls, never return the OTP from the API, never log raw account OTPs in production, and report provider failure truthfully. Real SMS verification remains deferred until phone ownership creates measured delivery/contact value; it is a separate trust signal from email ownership and delivery handoff OTP.
+
+---
+
 # Deferred Production Decisions
 
 The following remain intentionally deferred.
