@@ -3,13 +3,41 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../../api/axios.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 
+const PARTNER_IMAGE_UPLOAD_TIMEOUT_MS = 60000;
+
 async function uploadAsset(file, purpose) {
   const formData = new FormData();
   formData.append('purpose', purpose);
   formData.append('file', file);
 
-  const { data } = await api.post('/uploads', formData);
-  return data.data.asset.id;
+  try {
+    const { data } = await api.post('/uploads', formData, {
+      timeout: PARTNER_IMAGE_UPLOAD_TIMEOUT_MS,
+    });
+    return data.data.asset.id;
+  } catch (error) {
+    error.routeBiteStep = 'image-upload';
+    throw error;
+  }
+}
+
+function applicationErrorMessage(error) {
+  const backendMessage = error.response?.data?.error?.message;
+  if (backendMessage) return backendMessage;
+
+  if (error.code === 'ECONNABORTED' && error.routeBiteStep === 'image-upload') {
+    return 'The image upload took too long. Check your internet connection and use images smaller than 5 MB.';
+  }
+
+  if (!error.response && error.routeBiteStep === 'image-upload') {
+    return 'The images could not reach RouteBite storage. Check that the backend is running and your internet connection is stable.';
+  }
+
+  if (!error.response) {
+    return 'RouteBite could not reach the API. Check that the backend is running, then try again.';
+  }
+
+  return 'Partner application failed. Please try again.';
 }
 
 export default function PartnerApplyPage() {
@@ -47,10 +75,7 @@ export default function PartnerApplyPage() {
       await refreshSession();
       navigate('/account', { replace: true });
     } catch (requestError) {
-      setError(
-        requestError.response?.data?.error?.message ??
-          'Partner application failed. Please try again.',
-      );
+      setError(applicationErrorMessage(requestError));
     } finally {
       setSubmitting(false);
     }
